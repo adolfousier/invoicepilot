@@ -14,8 +14,8 @@ pub struct Config {
     pub drive_client_secret: String,
     pub drive_folder_path: String,
 
-    // Scheduling
-    pub fetch_invoices_day: u8,
+    // Scheduling (only required for scheduled mode)
+    pub fetch_invoices_day: Option<u8>,
 
     // Keywords to search for in emails
     pub target_keywords: Vec<String>,
@@ -28,8 +28,13 @@ pub struct Config {
 impl Config {
     /// Load configuration from environment variables
     pub fn from_env() -> Result<Self> {
-        // Load .env file if it exists
-        dotenvy::dotenv().ok();
+        // Load .env file from multiple possible locations
+        // Priority: 1. Current directory, 2. docker/.env, 3. Parent directory
+        if dotenvy::dotenv().is_err() {
+            if dotenvy::from_path("docker/.env").is_err() {
+                dotenvy::from_path("../.env").ok();
+            }
+        }
 
         // Parse date range
         let (start_date, end_date) = Self::parse_date_range()?;
@@ -46,9 +51,9 @@ impl Config {
             drive_folder_path: env::var("GOOGLE_DRIVE_FOLDER_LOCATION")
                 .context("GOOGLE_DRIVE_FOLDER_LOCATION not set in .env")?,
             fetch_invoices_day: env::var("FETCH_INVOICES_DAY")
-                .context("FETCH_INVOICES_DAY not set in .env")?
-                .parse()
-                .context("FETCH_INVOICES_DAY must be a number between 1-31")?,
+                .ok()
+                .map(|s| s.parse().context("FETCH_INVOICES_DAY must be a number between 1-31"))
+                .transpose()?,
             target_keywords: env::var("TARGET_KEYWORDS_TO_FETCH_AND_DOWNLOAD")
                 .unwrap_or_else(|_| "invoice,invoices,fatura,faturas".to_string())
                 .split(',')
@@ -85,8 +90,10 @@ impl Config {
 
     /// Validate configuration values
     fn validate(&self) -> Result<()> {
-        if self.fetch_invoices_day < 1 || self.fetch_invoices_day > 31 {
-            anyhow::bail!("FETCH_INVOICES_DAY must be between 1 and 31");
+        if let Some(day) = self.fetch_invoices_day {
+            if day < 1 || day > 31 {
+                anyhow::bail!("FETCH_INVOICES_DAY must be between 1 and 31");
+            }
         }
 
         if self.gmail_client_id.is_empty() {

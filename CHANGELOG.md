@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-10-13
+
+### Fixed
+- **Environment Loading**: Fixed `.env` file loading to support multiple locations (root, docker/, parent directory)
+- **Manual Mode**: Made `FETCH_INVOICES_DAY` optional for manual mode - only required for scheduled mode
+- **Docker Compose**: Fixed `env_file` configuration to properly load environment variables in containers
+- **Configuration Priority**: Added intelligent .env file discovery (current dir → docker/.env → ../.env)
+
+### Changed
+- **Docker Compose**: Updated to use `env_file` instead of volume mounting for environment variables
+- **Scheduling Logic**: Enhanced validation to require `FETCH_INVOICES_DAY` only for scheduled execution
+- **README**: Removed duplicate sections and improved documentation clarity
+- **Features**: Added automatic monthly scheduling to features list
+
+### Technical Improvements
+- **Config Module**: Made `fetch_invoices_day` an `Option<u8>` type for flexible configuration
+- **Error Messages**: Improved error messaging for missing configuration in scheduled mode
+- **Build Configuration**: Updated docker-compose.yml with correct build context and dockerfile path
+
 ## [0.1.1] - 2025-10-13
 
 ### Added

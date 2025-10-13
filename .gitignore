@@ -2,6 +2,8 @@
 CHANGES.md
 IMPLEMENTATION_PLAN.md
 /plans
+/docker
+
 
 client/target
 client/node_modules
