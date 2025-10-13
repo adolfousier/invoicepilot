@@ -4,6 +4,10 @@ use clap::{Parser, Subcommand};
 #[command(name = "invoice-agent")]
 #[command(about = "Automated invoice fetcher from Gmail to Google Drive", long_about = None)]
 pub struct Cli {
+    /// Skip Docker container execution (for internal use)
+    #[arg(long, hide = true)]
+    pub no_docker: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

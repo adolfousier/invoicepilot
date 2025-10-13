@@ -1,6 +1,6 @@
 # Invoice Pilot
 
-Invoice Pilot is a **fully automated invoice and bank statement management tool built with Rust. This project is completely free to use, modify, and distribute under the MIT License.
+Invoice Pilot is a fully automated invoice and bank statement management tool built with Rust. This project is completely free to use, modify, and distribute under the MIT License.
 
 ## Table of Contents
 
@@ -38,14 +38,16 @@ Invoice Pilot is a **fully automated invoice and bank statement management tool 
 - **Automatic financial institution detection** for banks, brokerages, exchanges, and payment processors
 - **Financial institution folder organization** (separate folders per institution with proper capitalization)
 - **Google Drive upload** with automatic folder creation
-- **Manual and scheduled execution modes**
+- **Manual and scheduled execution modes** with Docker-based automation
+- **Automatic monthly scheduling** - runs on configured day without user interaction
 - **Duplicate detection and skipping**
 - **Comprehensive error handling and logging**
 
 ## Prerequisites
 
 ### 1. Rust and Cargo
-- Install Rust: https://rustup.rs/
+
+- Install Rust: <https://rustup.rs/>
 - Cargo will be installed automatically with Rust
 
 ### 2. Google Cloud Project Setup
@@ -107,11 +109,13 @@ cargo build --release
 ## Configuration
 
 1. Copy the example environment file:
+
    ```bash
    cp .env.example .env
    ```
 
 2. Edit `.env` and fill in your credentials:
+
    ```env
    # Gmail account credentials (Account A)
    GOOGLE_GMAIL_CLIENT_ID=your-gmail-client-id.apps.googleusercontent.com
@@ -142,6 +146,7 @@ cargo run -- manual
 ```
 
 This will:
+
 1. Open a browser for Gmail authorization (Account A)
 2. Open a browser for Drive authorization (Account B)
 3. Cache tokens locally at `~/.config/invoice-pilot/`
@@ -149,12 +154,14 @@ This will:
 
 ### Manual Execution
 
-#### Fetch invoices from previous month:
+#### Fetch invoices from previous month
+
 ```bash
 cargo run -- manual
 ```
 
-#### Fetch invoices from custom date range:
+#### Fetch invoices from custom date range
+
 ```bash
 cargo run -- manual --date-range 2024-09-01:2024-10-12
 ```
@@ -171,17 +178,20 @@ This will only execute if today matches `FETCH_INVOICES_DAY` from `.env`.
 
 ### Authentication Management
 
-#### Re-authenticate Gmail:
+#### Re-authenticate Gmail
+
 ```bash
 cargo run -- auth gmail
 ```
 
-#### Re-authenticate Drive:
+#### Re-authenticate Drive
+
 ```bash
 cargo run -- auth drive
 ```
 
-#### Clear all tokens:
+#### Clear all tokens
+
 ```bash
 cargo run -- auth reset
 ```
@@ -189,17 +199,20 @@ cargo run -- auth reset
 ## How It Works
 
 ### 1. Gmail Search & Fetching
+
 - **Searches Gmail** for emails containing your configured keywords (invoice, fatura, statement, bank, etc.)
 - **Downloads ALL attachments** from matching emails
 - **Creates smart filenames** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)
 
 ### 2. Automatic Financial Institution Detection
+
 - **Identifies banks, brokerages, exchanges, and payment processors** from email content
 - **Organizes files by institution** in separate folders with proper capitalization
 - **Supports 100+ European banks, Wise, Revolut, Coinbase, Stripe, PayPal, and more**
 - **Uses keywords** like "bank", "banco", "statement", "financial", "fiscal", "tributary"
 
 ### 3. Google Drive Upload & Organization
+
 - **Creates monthly folders** automatically (e.g., `2025/`, `2024/`)
 - **Creates institution-specific folders** (e.g., `Stripe/`, `Wise/`, `Coinbase/`)
 - **Uploads files** with proper organization
@@ -208,6 +221,7 @@ cargo run -- auth reset
 ## Supported Financial Institutions
 
 ### Digital Banks & Payment Services
+
 - Wise (formerly TransferWise)
 - Revolut
 - Nubank
@@ -221,6 +235,7 @@ cargo run -- auth reset
 - Mollie
 
 ### Traditional Banks
+
 - Santander
 - BBVA
 - CaixaBank
@@ -231,6 +246,7 @@ cargo run -- auth reset
 - And many more European banks
 
 ### Brokerages & Trading Platforms
+
 - Interactive Brokers
 - Charles Schwab
 - E*TRADE
@@ -240,6 +256,7 @@ cargo run -- auth reset
 - Webull
 
 ### Cryptocurrency Exchanges
+
 - Coinbase
 - Binance
 - Kraken
@@ -248,13 +265,21 @@ cargo run -- auth reset
 
 ## Automated Execution
 
-If `FETCH_INVOICES_DAY` is set in your `.env` file, Invoice Pilot can run automatically on the specified day of each month. You'll need to set up external scheduling (systemd timer or cron) to run the tool on that specific day each month.
+If `FETCH_INVOICES_DAY` is set in your `.env` file, Invoice Pilot can run automatically on the specified day of each month. The `scheduled` command will automatically spin up a Docker container to execute the job, ensuring isolation and reliability.
 
-In automated mode, cached OAuth tokens are used, so no user interaction or browser opening is required. Ensure tokens are cached by running manual mode first.
+In automated mode, cached OAuth tokens are used, so no user interaction or browser opening is required. The job runs in a container with mounted volumes for configuration and tokens.
+
+To use automated execution:
+
+1. Build the Docker image: `cd docker && docker-compose build`
+2. Run the scheduled command: `cargo run -- scheduled` (or `./target/release/invoice-pilot scheduled`)
+
+If you prefer external scheduling, you can still set up systemd timers or cron jobs as described below.
 
 ### Option 1: Systemd Timer (Linux)
 
 1. Create the service file `/etc/systemd/system/invoice-pilot.service`:
+
    ```ini
    [Unit]
    Description=Invoice Pilot
@@ -268,6 +293,7 @@ In automated mode, cached OAuth tokens are used, so no user interaction or brows
    ```
 
 2. Create the timer file `/etc/systemd/system/invoice-pilot.timer`:
+
    ```ini
    [Unit]
    Description=Invoice Pilot Monthly Check
@@ -283,6 +309,7 @@ In automated mode, cached OAuth tokens are used, so no user interaction or brows
    Replace `{FETCH_INVOICES_DAY}` with your configured day (e.g., `05` for the 5th of each month).
 
 3. Enable and start the timer:
+
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable invoice-pilot.timer
@@ -308,6 +335,7 @@ Replace `{FETCH_INVOICES_DAY}` with your configured day (e.g., `5` for the 5th o
 ### Port 8080 Already in Use
 
 The OAuth callback uses port 8080. If it's in use:
+
 - Close any running instances of the tool
 - Check for other services using port 8080
 - Kill the process: `lsof -ti:8080 | xargs kill -9`
@@ -315,6 +343,7 @@ The OAuth callback uses port 8080. If it's in use:
 ### Authorization Errors
 
 If you get authorization errors:
+
 1. Check that APIs are enabled in Google Cloud Console
 2. Verify OAuth2 scopes are configured correctly
 3. Re-authenticate: `cargo run -- auth reset`
@@ -323,6 +352,7 @@ If you get authorization errors:
 ### Token Expired
 
 Tokens auto-refresh, but if you encounter issues:
+
 ```bash
 cargo run -- auth reset
 cargo run -- manual
@@ -430,45 +460,6 @@ Thank you for contributing to Invoice Pilot! 🚀
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 **This software is completely free to use, modify, and distribute for any purpose.**
-2. **Enable Email Notifications**: Ensure invoice/statement notifications are enabled
-3. **Use Dedicated Email**: Set up a dedicated Gmail account for receiving these documents
-4. **Configure Keywords**: Add relevant keywords to your `TARGET_KEYWORDS_TO_FETCH_AND_DOWNLOAD`
-
-### Supported Services
-
-**Digital Banks & Payment Services:**
-- Wise (formerly TransferWise)
-- Revolut
-- Nubank
-- Bunq
-- Monzo
-- Starling Bank
-- Chime
-- PayPal
-
-**Traditional Banks:**
-- Santander
-- BBVA
-- CaixaBank
-- ING
-- Deutsche Bank
-- HSBC
-- Barclays
-- And many more European banks
-
-### Email Setup Tips
-
-1. **Forwarding Rules**: Set up email forwarding if statements go to different addresses
-2. **Filter Labels**: Use Gmail filters to automatically label bank emails
-3. **Regular Checks**: Monitor that emails are being received correctly
-4. **Keyword Optimization**: Add service-specific keywords to improve detection
-
-### Example Configuration
-
-```env
-# Include financial institution keywords for better detection
-TARGET_KEYWORDS_TO_FETCH_AND_DOWNLOAD="invoice, fatura, statement, wise, revolut, nubank, santander, bank, extrato, movimientos, financial, fiscal, tributary, interactive brokers, coinbase, stripe, paypal"
-```
 
 ## Support
 
