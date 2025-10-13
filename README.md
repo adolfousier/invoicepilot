@@ -186,55 +186,6 @@ cargo run -- auth drive
 cargo run -- auth reset
 ```
 
-## Scheduling Options
-
-### Option 1: Systemd Timer (Linux)
-
-1. Create the service file `/etc/systemd/system/invoice-agent.service`:
-   ```ini
-   [Unit]
-   Description=invoice pilot
-
-   [Service]
-   Type=oneshot
-   User=your-username
-   WorkingDirectory=/path/to/invoice-agent
-   ExecStart=/path/to/invoice-agent/target/release/invoice-agent scheduled
-   Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-   ```
-
-2. Create the timer file `/etc/systemd/system/invoice-agent.timer`:
-   ```ini
-   [Unit]
-   Description=invoice pilot Monthly Check
-
-   [Timer]
-   OnCalendar=daily
-   Persistent=true
-
-   [Install]
-   WantedBy=timers.target
-   ```
-
-3. Enable and start the timer:
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable invoice-agent.timer
-   sudo systemctl start invoice-agent.timer
-
-   # Check status
-   sudo systemctl status invoice-agent.timer
-   ```
-
-### Option 2: Cron Job
-
-Add to your crontab (`crontab -e`):
-
-```cron
-# Run daily at 9 AM
-0 9 * * * cd /path/to/invoice-agent && /path/to/invoice-agent/target/release/invoice-agent scheduled >> /var/log/invoice-agent.log 2>&1
-```
-
 ## How It Works
 
 ### 1. Gmail Search & Fetching
@@ -295,7 +246,11 @@ Add to your crontab (`crontab -e`):
 - Coinbase Pro
 - Binance US
 
-## Scheduling
+## Automated Execution
+
+If `FETCH_INVOICES_DAY` is set in your `.env` file, Invoice Pilot can run automatically on the specified day of each month. You'll need to set up external scheduling (systemd timer or cron) to run the tool on that specific day each month.
+
+In automated mode, cached OAuth tokens are used, so no user interaction or browser opening is required. Ensure tokens are cached by running manual mode first.
 
 ### Option 1: Systemd Timer (Linux)
 
@@ -318,12 +273,14 @@ Add to your crontab (`crontab -e`):
    Description=Invoice Pilot Monthly Check
 
    [Timer]
-   OnCalendar=daily
+   OnCalendar=*-*-{FETCH_INVOICES_DAY}
    Persistent=true
 
    [Install]
    WantedBy=timers.target
    ```
+
+   Replace `{FETCH_INVOICES_DAY}` with your configured day (e.g., `05` for the 5th of each month).
 
 3. Enable and start the timer:
    ```bash
@@ -340,9 +297,11 @@ Add to your crontab (`crontab -e`):
 Add to your crontab (`crontab -e`):
 
 ```cron
-# Run daily at 9 AM
-0 9 * * * cd /path/to/invoice-pilot && /path/to/invoice-pilot/target/release/invoice-pilot scheduled >> /var/log/invoice-pilot.log 2>&1
+# Run on the configured day of each month at 9 AM
+0 9 {FETCH_INVOICES_DAY} * * cd /path/to/invoice-pilot && /path/to/invoice-pilot/target/release/invoice-pilot scheduled >> /var/log/invoice-pilot.log 2>&1
 ```
+
+Replace `{FETCH_INVOICES_DAY}` with your configured day (e.g., `5` for the 5th of each month).
 
 ## Troubleshooting
 
