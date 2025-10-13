@@ -1,7 +1,7 @@
 /target
-/.claude
 CHANGES.md
 IMPLEMENTATION_PLAN.md
+/plans
 
 client/target
 client/node_modules

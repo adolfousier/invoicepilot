@@ -6,7 +6,7 @@ mod gmail;
 mod scheduler;
 
 use anyhow::Result;
-use chrono::Datelike;
+use chrono::{Datelike, NaiveDate};
 use clap::Parser;
 use cli::args::{AuthAction, Cli, Commands};
 use config::env::Config;
@@ -80,10 +80,37 @@ async fn run_scheduled() -> Result<()> {
     Ok(())
 }
 
+
+
+/// Determine the billing month from the date range
+/// If the range is primarily in one month, use that month
+/// Otherwise, use the end date's month
+fn determine_billing_month(start_date: NaiveDate, end_date: NaiveDate) -> String {
+    // If range spans multiple months, use the month that contains most of the range
+    let start_month = start_date.month();
+    let end_month = end_date.month();
+
+    if start_month == end_month {
+        // Same month - use it
+        format!("{}", chrono::Month::try_from(end_month as u8).unwrap().name())
+    } else {
+        // Different months - check if it's primarily last month billing
+        let days_in_end_month = (end_date - NaiveDate::from_ymd_opt(end_date.year(), end_date.month(), 1).unwrap()).num_days() + 1;
+        let total_days = (end_date - start_date).num_days() + 1;
+
+        // If we're early in the end month (less than 15 days), it's likely previous month billing
+        if days_in_end_month < 15 && total_days > 20 {
+            format!("{}", chrono::Month::try_from(start_month as u8).unwrap().name())
+        } else {
+            format!("{}", chrono::Month::try_from(end_month as u8).unwrap().name())
+        }
+    }
+}
+
 async fn fetch_and_upload_invoices(
     config: Config,
-    start_date: chrono::NaiveDate,
-    end_date: chrono::NaiveDate,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
 ) -> Result<()> {
     // 1. Authenticate with Gmail
     println!("═══ Gmail Authentication ═══");
@@ -136,31 +163,70 @@ async fn fetch_and_upload_invoices(
 
     println!("\n✓ Downloaded {} attachment(s)", all_attachments.len());
 
-    // 5. Save attachments to temp directory
-    println!("\n═══ Preparing Upload ═══");
-    let mut file_paths = Vec::new();
+    // 5. Determine billing month and create monthly folder
+    let billing_month = determine_billing_month(start_date, end_date);
+    println!("📅 Billing month detected: {}", billing_month);
 
+    let monthly_folder_path = format!("{}/{}", config.drive_folder_path, billing_month);
+    let _monthly_folder_id = drive::folder::find_or_create_folder(&drive_client, &monthly_folder_path).await?;
+
+    // 6. Group attachments by bank name and prepare for upload
+    println!("\n═══ Preparing Upload ═══");
+    
+    // Group attachments by bank name
+    let mut bank_groups: std::collections::HashMap<Option<String>, Vec<gmail::attachment::InvoiceAttachmentWithBank>> = std::collections::HashMap::new();
     for attachment in &all_attachments {
-        match gmail::attachment::save_attachment_to_temp(attachment) {
-            Ok(path) => {
-                file_paths.push(path);
-            }
-            Err(e) => {
-                eprintln!("   ✗ Failed to save {}: {}", attachment.filename, e);
-            }
-        }
+        bank_groups.entry(attachment.bank_name.clone()).or_insert_with(Vec::new).push(attachment.clone());
     }
 
-    // 6. Find or create Drive folder
-    let folder_id = drive::folder::find_or_create_folder(&drive_client, &config.drive_folder_path).await?;
+    let mut total_uploaded = 0;
+    let mut total_failed = 0;
+    let mut banks_processed = Vec::new();
+    let mut all_file_paths = Vec::new();
 
-    // 7. Upload files to Drive
+    // 7. Upload files to bank-specific folders
     println!("\n═══ Uploading to Google Drive ═══");
-    let summary = drive::upload::upload_files(&drive_client, &file_paths, &folder_id).await?;
+    
+    for (bank_name, attachments) in bank_groups {
+        let bank_display_name = bank_name.as_deref().unwrap_or("General");
+        println!("\n🏦 Processing bank: {}", bank_display_name);
+        
+        // Create bank-specific folder
+        let bank_folder_path = if let Some(ref bank) = bank_name {
+            format!("{}/{}", monthly_folder_path, bank)
+        } else {
+            monthly_folder_path.clone()
+        };
+        
+        let bank_folder_id = drive::folder::find_or_create_folder(&drive_client, &bank_folder_path).await?;
+        
+        // Save attachments to temp directory for this bank
+        let mut file_paths = Vec::new();
+        for attachment in &attachments {
+            match gmail::attachment::save_attachment_to_temp(&attachment.attachment) {
+                Ok(path) => {
+                    file_paths.push(path.clone());
+                    all_file_paths.push(path);
+                }
+                Err(e) => {
+                    eprintln!("   ✗ Failed to save {}: {}", attachment.attachment.filename, e);
+                }
+            }
+        }
+        
+        // Upload files to bank-specific folder
+        let bank_summary = drive::upload::upload_files(&drive_client, &file_paths, &bank_folder_id).await?;
+        
+        total_uploaded += bank_summary.uploaded;
+        total_failed += bank_summary.failed;
+        banks_processed.push((bank_display_name.to_string(), bank_summary.clone()));
+        
+        println!("   ✓ Bank summary: {} uploaded, {} failed", bank_summary.uploaded, bank_summary.failed);
+    }
 
     // 8. Cleanup temp files
     println!("\n═══ Cleanup ═══");
-    for file_path in &file_paths {
+    for file_path in &all_file_paths {
         if let Err(e) = std::fs::remove_file(file_path) {
             eprintln!("   ⚠ Failed to remove temp file {}: {}", file_path.display(), e);
         }
@@ -169,13 +235,34 @@ async fn fetch_and_upload_invoices(
 
     // Print summary
     println!("\n═══ Summary ═══");
-    println!("Total files:    {}", summary.total);
-    println!("Uploaded:       {}", summary.uploaded);
-    println!("Failed:         {}", summary.failed);
-    println!("Folder:         {}", config.drive_folder_path);
+    println!("Total files:    {}", all_file_paths.len());
+    println!("Uploaded:       {}", total_uploaded);
+    println!("Failed:         {}", total_failed);
+    println!("Monthly folder: {}", monthly_folder_path);
+    
+    if !banks_processed.is_empty() {
+        println!("\n🏦 Bank breakdown:");
+        for (bank_name, summary) in &banks_processed {
+            if bank_name == "General" {
+                println!("  📄 General documents: {} uploaded, {} failed", summary.uploaded, summary.failed);
+            } else {
+                println!("  🏦 {}: {} uploaded, {} failed", bank_name, summary.uploaded, summary.failed);
+            }
+        }
+    }
+    
+    // Show bank detection statistics
+    let bank_count = banks_processed.iter().filter(|(name, _)| name != &"General").count();
+    if bank_count > 0 {
+        println!("\n✅ Detected {} bank statement(s) from different institutions", bank_count);
+    } else {
+        println!("\nℹ No bank statements detected - only general documents found");
+    }
 
     Ok(())
 }
+
+
 
 async fn handle_auth_command(action: AuthAction) -> Result<()> {
     match action {

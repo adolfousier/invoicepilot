@@ -121,7 +121,6 @@ pub async fn upload_files(
     folder_id: &str,
 ) -> Result<UploadSummary> {
     let mut summary = UploadSummary {
-        total: file_paths.len(),
         uploaded: 0,
         skipped: 0,
         failed: 0,
@@ -143,9 +142,8 @@ pub async fn upload_files(
     Ok(summary)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UploadSummary {
-    pub total: usize,
     pub uploaded: usize,
     #[allow(dead_code)]
     pub skipped: usize,

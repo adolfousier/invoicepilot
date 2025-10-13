@@ -47,12 +47,19 @@ pub struct Message {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct MessageHeader {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct MessagePart {
     pub parts: Option<Vec<MessagePart>>,
     pub body: Option<MessagePartBody>,
     #[serde(rename = "mimeType")]
     pub mime_type: Option<String>,
     pub filename: Option<String>,
+    pub headers: Option<Vec<MessageHeader>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
