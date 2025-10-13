@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  invoice-pilot:
+    build: .
+    image: invoice-pilot:latest
+    volumes:
+      - ./.env:/app/.env
+      - ~/.config/invoice-pilot:/root/.config/invoice-pilot
+    command: ["scheduled"]
