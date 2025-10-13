@@ -2,35 +2,37 @@
 
 Invoice Pilot is a **free and open-source** terminal-based automation tool built with Rust. This project is completely free to use, modify, and distribute under the MIT License.
 
+## What It Does
+
+Invoice Pilot is a **fully automated invoice and bank statement management tool** that:
+
+✅ **Fetches invoices and bank statements from Gmail**  
+✅ **Automatically detects financial institutions** (banks, brokerages, exchanges, payment processors)  
+✅ **Downloads all attachments** from matching emails  
+✅ **Organizes files by institution** in Google Drive with proper capitalization  
+✅ **Creates smart filenames** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)  
+✅ **Prevents duplicates** by checking existing files  
+✅ **Runs manually or on schedule**  
+
 ## Features
 
 - **Dual Google account support** (separate accounts for Gmail and Drive)
 - **OAuth2 authentication with token caching**
 - **Automatic token refresh**
-- **Search Gmail for invoices/faturas/bank statements with attachments**
-- **Smart filename prefixing** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)
+- **Gmail search** for invoices/faturas/bank statements with attachments
+- **Smart filename prefixing** with sender names
 - **Automatic financial institution detection** for banks, brokerages, exchanges, and payment processors
 - **Financial institution folder organization** (separate folders per institution with proper capitalization)
-- **Upload files to organized Google Drive folders**
+- **Google Drive upload** with automatic folder creation
 - **Manual and scheduled execution modes**
 - **Duplicate detection and skipping**
 - **Comprehensive error handling and logging**
 
 ## Prerequisites
 
-### 1. Bank & Financial Institution Detection
-
-The tool automatically detects bank statements, brokerages, exchanges, and financial documents from emails containing:
-- **Digital Banks**: Wise, Revolut, Nubank, Bunq, Monzo, Starling, Chime, etc.
-- **Traditional Banks**: Santander, BBVA, CaixaBank, ING, Deutsche Bank, HSBC, Barclays, etc.
-- **Brokerages & Trading Platforms**: Interactive Brokers, Charles Schwab, E*TRADE, TD Ameritrade, Fidelity, Robinhood, Webull
-- **Cryptocurrency Exchanges**: Coinbase, Binance, Kraken, Coinbase Pro, Binance US
-- **Payment Processors**: Stripe, PayPal, Adyen, Mollie
-- **European Banks**: All major banks from Spain, Portugal, Italy, France, Germany, Netherlands, Poland, Czech Republic, Austria, Switzerland, Nordic countries
-- **Keywords**: "bank", "banco", "statement", "extrato", "movimientos", "financial", "fintech", "fiscal", "tributary"
-- Combined with your configured `TARGET_KEYWORDS_TO_FETCH_AND_DOWNLOAD`
-
-Detected financial documents are organized in separate folders by institution name with proper capitalization (e.g., "Stripe", "Interactive Brokers", "Coinbase").
+### 1. Rust and Cargo
+- Install Rust: https://rustup.rs/
+- Cargo will be installed automatically with Rust
 
 ### 2. Google Cloud Project Setup
 
@@ -72,6 +74,28 @@ You need **TWO** Google Cloud projects (or one project with two OAuth2 clients):
 4. Configure OAuth consent screen:
    - Go to "APIs & Services" > "OAuth consent screen"
    - Add scope: `https://www.googleapis.com/auth/drive.file`
+
+## How It Works
+
+Invoice Pilot automatically **fetches invoices and bank statements from Gmail** and **uploads them to Google Drive** with intelligent organization:
+
+### 1. Gmail Invoice & Bank Statement Fetching
+- **Searches Gmail** for emails containing your configured keywords (invoice, fatura, statement, bank, etc.)
+- **Downloads attachments** from matching emails
+- **Detects financial institutions** automatically (banks, brokerages, exchanges, payment processors)
+- **Creates smart filenames** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)
+
+### 2. Automatic Financial Institution Detection
+- **Identifies banks, brokerages, exchanges, and payment processors** from email content
+- **Organizes files by institution** in separate folders with proper capitalization
+- **Supports 100+ European banks, Wise, Revolut, Coinbase, Stripe, PayPal, and more**
+- **Uses keywords** like "bank", "banco", "statement", "financial", "fiscal", "tributary"
+
+### 3. Google Drive Upload & Organization
+- **Creates monthly folders** automatically (e.g., `2025/`, `2024/`)
+- **Creates institution-specific folders** (e.g., `Stripe/`, `Wise/`, `Coinbase/`)
+- **Uploads files** with proper organization
+- **Prevents duplicates** by checking if files already exist
 
 ## Installation
 
