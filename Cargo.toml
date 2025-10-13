@@ -1,0 +1,24 @@
+[package]
+name = "invoice-pilot"
+version = "0.1.1"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+base64 = "0.22.1"
+chrono = "0.4.42"
+clap = { version = "4.5.48", features = ["derive"] }
+dirs = "6.0.0"
+dotenvy = "0.15.7"
+oauth2 = "4.4"
+reqwest = { version = "0.12.23", features = ["json", "multipart"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "2.0.17"
+tokio = { version = "1.47.1", features = ["full"] }
+url = "2.5.7"
+webbrowser = "1.0.5"
+
+[dev-dependencies]
+mockito = "1.7.0"
+tokio-test = "0.4.4"
