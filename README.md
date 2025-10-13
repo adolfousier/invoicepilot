@@ -248,15 +248,9 @@ cargo run -- auth reset
 
 ## Automated Execution
 
-If `FETCH_INVOICES_DAY` is set in your `.env` file, Invoice Pilot can run automatically on the specified day of each month. The `scheduled` command will automatically spin up a Docker container to execute the job, ensuring isolation and reliability.
+If `FETCH_INVOICES_DAY` is set in your `.env` file, Invoice Pilot can run automatically on the specified day of each month. You'll need to set up external scheduling (systemd timer or cron) to run the tool on that specific day each month.
 
-In automated mode, cached OAuth tokens are used, so no user interaction or browser opening is required. The job runs in a container with mounted volumes for configuration and tokens.
-
-To use automated execution:
-1. Build the Docker image: `docker-compose build`
-2. Run the scheduled command: `cargo run -- scheduled` (or `./target/release/invoice-pilot scheduled`)
-
-If you prefer external scheduling, you can still set up systemd timers or cron jobs as described below. Ensure tokens are cached by running manual mode first.
+In automated mode, cached OAuth tokens are used, so no user interaction or browser opening is required. Ensure tokens are cached by running manual mode first.
 
 ### Option 1: Systemd Timer (Linux)
 

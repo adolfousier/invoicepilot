@@ -6,7 +6,6 @@ mod gmail;
 mod scheduler;
 
 use anyhow::Result;
-use bollard::Docker;
 use chrono::{Datelike, NaiveDate};
 use clap::Parser;
 use cli::args::{AuthAction, Cli, Commands};
@@ -21,7 +20,7 @@ async fn main() -> Result<()> {
             run_manual(date_range).await?;
         }
         Commands::Scheduled => {
-            run_scheduled(&cli).await?;
+            run_scheduled().await?;
         }
         Commands::Auth { action } => {
             handle_auth_command(action).await?;
@@ -55,7 +54,7 @@ async fn run_manual(date_range: Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn run_scheduled(cli: &Cli) -> Result<()> {
+async fn run_scheduled() -> Result<()> {
     println!("⏰ Invoice Agent - Scheduled Mode\n");
 
     // Load configuration
@@ -68,79 +67,16 @@ async fn run_scheduled(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
-    if cli.no_docker {
-        // Run directly (inside container)
-        println!("✓ Today is day {} - running invoice fetch\n", config.fetch_invoices_day);
+    println!("✓ Today is day {} - running invoice fetch\n", config.fetch_invoices_day);
 
-        // Use previous month range
-        let (start_date, end_date) = scheduler::runner::get_previous_month_range();
-        println!("📅 Date range: {} to {}\n", start_date, end_date);
+    // Use previous month range
+    let (start_date, end_date) = scheduler::runner::get_previous_month_range();
+    println!("📅 Date range: {} to {}\n", start_date, end_date);
 
-        // Execute the invoice fetching pipeline
-        fetch_and_upload_invoices(config, start_date, end_date).await?;
-    } else {
-        // Run in Docker container
-        println!("✓ Today is day {} - running invoice fetch in Docker container\n", config.fetch_invoices_day);
-        run_in_docker().await?;
-    }
+    // Execute the invoice fetching pipeline
+    fetch_and_upload_invoices(config, start_date, end_date).await?;
 
     println!("\n✅ Scheduled run completed successfully!");
-    Ok(())
-}
-
-async fn run_in_docker() -> Result<()> {
-    let docker = Docker::connect_with_local_defaults()?;
-
-    // Define container config
-    let config = bollard::container::Config {
-        image: Some("invoice-pilot:latest".to_string()),
-        cmd: Some(vec!["scheduled".to_string(), "--no-docker".to_string()]), // Avoid recursion
-        host_config: Some(bollard::models::HostConfig {
-            binds: Some(vec![
-                ".env:/app/.env".to_string(),
-                format!("{}/.config/invoice-pilot:/root/.config/invoice-pilot", dirs::home_dir().unwrap().display()),
-            ]),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-
-    // Create container
-    let container_name = format!("invoice-pilot-{}", chrono::Utc::now().timestamp());
-    docker.create_container(Some(bollard::container::CreateContainerOptions {
-        name: &container_name,
-        platform: None,
-    }), config).await?;
-
-    // Start container
-    docker.start_container::<&str>(&container_name, None).await?;
-
-    // Wait for completion
-    let wait_options = bollard::container::WaitContainerOptions {
-        condition: "not-running",
-    };
-    let mut wait_stream = docker.wait_container::<&str>(&container_name, Some(wait_options));
-    if let Some(result) = wait_stream.next().await {
-        result?;
-    }
-
-    // Get logs
-    let logs_options = bollard::container::LogsOptions {
-        stdout: true,
-        stderr: true,
-        ..Default::default()
-    };
-    let mut logs_stream = docker.logs::<&str>(&container_name, Some(logs_options));
-    use futures_util::stream::StreamExt;
-    while let Some(log) = logs_stream.next().await {
-        if let Ok(log) = log {
-            print!("{}", log);
-        }
-    }
-
-    // Remove container
-    docker.remove_container(&container_name, None).await?;
-
     Ok(())
 }
 
