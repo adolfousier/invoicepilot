@@ -1,10 +1,24 @@
 # Invoice Pilot
 
-Invoice Pilot is a **free and open-source** terminal-based automation tool built with Rust. This project is completely free to use, modify, and distribute under the MIT License.
+Invoice Pilot is a **fully automated invoice and bank statement management tool built with Rust. This project is completely free to use, modify, and distribute under the MIT License.
+
+## Table of Contents
+
+- [What It Does](#what-it-does)
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [How It Works](#how-it-works)
+- [Supported Financial Institutions](#supported-financial-institutions)
+- [Scheduling](#scheduling)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## What It Does
-
-Invoice Pilot is a **fully automated invoice and bank statement management tool** that:
 
 ✅ **Fetches invoices and bank statements from Gmail**  
 ✅ **Automatically detects financial institutions** (banks, brokerages, exchanges, payment processors)  
@@ -12,7 +26,7 @@ Invoice Pilot is a **fully automated invoice and bank statement management tool*
 ✅ **Organizes files by institution** in Google Drive with proper capitalization  
 ✅ **Creates smart filenames** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)  
 ✅ **Prevents duplicates** by checking existing files  
-✅ **Runs manually or on schedule**  
+✅ **Runs manually or on schedule**
 
 ## Features
 
@@ -75,44 +89,22 @@ You need **TWO** Google Cloud projects (or one project with two OAuth2 clients):
    - Go to "APIs & Services" > "OAuth consent screen"
    - Add scope: `https://www.googleapis.com/auth/drive.file`
 
-## How It Works
-
-Invoice Pilot automatically **fetches invoices and bank statements from Gmail** and **uploads them to Google Drive** with intelligent organization:
-
-### 1. Gmail Invoice & Bank Statement Fetching
-- **Searches Gmail** for emails containing your configured keywords (invoice, fatura, statement, bank, etc.)
-- **Downloads attachments** from matching emails
-- **Detects financial institutions** automatically (banks, brokerages, exchanges, payment processors)
-- **Creates smart filenames** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)
-
-### 2. Automatic Financial Institution Detection
-- **Identifies banks, brokerages, exchanges, and payment processors** from email content
-- **Organizes files by institution** in separate folders with proper capitalization
-- **Supports 100+ European banks, Wise, Revolut, Coinbase, Stripe, PayPal, and more**
-- **Uses keywords** like "bank", "banco", "statement", "financial", "fiscal", "tributary"
-
-### 3. Google Drive Upload & Organization
-- **Creates monthly folders** automatically (e.g., `2025/`, `2024/`)
-- **Creates institution-specific folders** (e.g., `Stripe/`, `Wise/`, `Coinbase/`)
-- **Uploads files** with proper organization
-- **Prevents duplicates** by checking if files already exist
-
 ## Installation
 
 ### Using Cargo
 
 ```bash
 # Clone the repository
-git clone <your-repo-url>
-cd invoice-agent
+git clone https://github.com/adolfousier/invoicepilot.git
+cd invoice-pilot
 
 # Build the project
 cargo build --release
 
-# The binary will be at target/release/invoice-agent
+# The binary will be at target/release/invoice-pilot
 ```
 
-### Configuration
+## Configuration
 
 1. Copy the example environment file:
    ```bash
@@ -135,8 +127,8 @@ cargo build --release
    # Day of month to fetch invoices (1-31)
    FETCH_INVOICES_DAY=5
 
-# Keywords to search for (comma-separated)
-     TARGET_KEYWORDS_TO_FETCH_AND_DOWNLOAD="invoice, invoices, fatura, faturas, statement, bank, extrato, movimientos, financial, fiscal, tributary"
+   # Keywords to search for (comma-separated)
+   TARGET_KEYWORDS_TO_FETCH_AND_DOWNLOAD="invoice, invoices, fatura, faturas, statement, bank, extrato, movimientos, financial, fiscal, tributary"
    ```
 
 ## Usage
@@ -152,7 +144,7 @@ cargo run -- manual
 This will:
 1. Open a browser for Gmail authorization (Account A)
 2. Open a browser for Drive authorization (Account B)
-3. Cache tokens locally at `~/.config/invoice-agent/`
+3. Cache tokens locally at `~/.config/invoice-pilot/`
 4. Fetch invoices from the previous month and upload to Drive
 
 ### Manual Execution
@@ -245,65 +237,111 @@ Add to your crontab (`crontab -e`):
 
 ## How It Works
 
-### Gmail Invoice and Bank Statement Processing
+### 1. Gmail Search & Fetching
+- **Searches Gmail** for emails containing your configured keywords (invoice, fatura, statement, bank, etc.)
+- **Downloads ALL attachments** from matching emails
+- **Creates smart filenames** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)
 
-1. **Authentication**: Uses OAuth2 with PKCE flow for secure authentication
-2. **Token Caching**: Stores access tokens locally and auto-refreshes when expired
-3. **Gmail Search**: Searches for emails containing:
-   - Keywords: "faturas", "fatura", "invoice", "invoices", "statement", "bank" (customizable)
-   - Has attachment
-   - Within specified date range
-4. **Bank Detection**: Automatically identifies bank statements from email content:
-   - Detects European banks: Wise, Revolut, Nubank, Santander, BBVA, CaixaBank, ING, etc.
-   - Looks for bank names, "banco", "bank" keywords
-   - No additional configuration needed
-5. **Download**: Downloads all matching attachments with smart filenames:
-   - Extracts sender name from email headers
-   - Sanitizes and prepends to filename
-   - Example: `17821893723.pdf` → `langfuse-gmbh-17821893723.pdf`
-6. **Upload**: Uploads to Google Drive with:
-   - Automatic monthly folder creation
-   - Automatic bank-specific subfolder creation
-   - Duplicate detection (skips if file already exists)
-7. **Cleanup**: Removes temporary files after upload
+### 2. Automatic Financial Institution Detection
+- **Identifies banks, brokerages, exchanges, and payment processors** from email content
+- **Organizes files by institution** in separate folders with proper capitalization
+- **Supports 100+ European banks, Wise, Revolut, Coinbase, Stripe, PayPal, and more**
+- **Uses keywords** like "bank", "banco", "statement", "financial", "fiscal", "tributary"
 
-### Bank Statement Processing
+### 3. Google Drive Upload & Organization
+- **Creates monthly folders** automatically (e.g., `2025/`, `2024/`)
+- **Creates institution-specific folders** (e.g., `Stripe/`, `Wise/`, `Coinbase/`)
+- **Uploads files** with proper organization
+- **Prevents duplicates** by checking existing files
 
-1. **Bank Detection**: Automatically identifies bank names from email headers and content
-2. **Folder Organization**: Creates separate folders for each detected bank
-3. **Smart Filenames**: Uses bank name + sender name + original filename
-    - Example: `wise-statement-eur-20241001-2024-10.pdf`
-    - Example: `revolut-extract-monthly-september.pdf`
-4. **Multi-format**: Supports PDF, CSV, and other document types
+## Supported Financial Institutions
 
-## Gmail Search Query
+### Digital Banks & Payment Services
+- Wise (formerly TransferWise)
+- Revolut
+- Nubank
+- Bunq
+- Monzo
+- Starling Bank
+- Chime
+- PayPal
+- Stripe
+- Adyen
+- Mollie
 
-The tool searches Gmail using your configured keywords:
-```
-(keyword1 OR keyword2 OR keyword3 ...) has:attachment after:YYYY/MM/DD before:YYYY/MM/DD
-```
+### Traditional Banks
+- Santander
+- BBVA
+- CaixaBank
+- ING
+- Deutsche Bank
+- HSBC
+- Barclays
+- And many more European banks
 
-Default keywords: `invoice`, `invoices`, `fatura`, `faturas`, `statement`, `bank`
+### Brokerages & Trading Platforms
+- Interactive Brokers
+- Charles Schwab
+- E*TRADE
+- TD Ameritrade
+- Fidelity
+- Robinhood
+- Webull
 
-**Note**: The tool downloads **ALL attachments** from matching emails. This ensures maximum coverage for both invoices and bank statements.
+### Cryptocurrency Exchanges
+- Coinbase
+- Binance
+- Kraken
+- Coinbase Pro
+- Binance US
 
-## Folder Structure
+## Scheduling
 
-Folders are created automatically based on `GOOGLE_DRIVE_FOLDER_LOCATION`:
+### Option 1: Systemd Timer (Linux)
 
-```
-Google Drive (Root)
-└── billing
-    └── all-expenses
-        └── 2025
-            ├── langfuse-gmbh-invoice-2024-10.pdf
-            ├── aws-statement-november.pdf
-            ├── Wise/
-            │   └── wise-statement-eur-20241001-2024-10.pdf
-            ├── Revolut/
-            │   └── revolut-extract-monthly-september.pdf
-            └── Santander/
-                └── banco-santander-extract-october.pdf
+1. Create the service file `/etc/systemd/system/invoice-pilot.service`:
+   ```ini
+   [Unit]
+   Description=Invoice Pilot
+
+   [Service]
+   Type=oneshot
+   User=your-username
+   WorkingDirectory=/path/to/invoice-pilot
+   ExecStart=/path/to/invoice-pilot/target/release/invoice-pilot scheduled
+   Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+   ```
+
+2. Create the timer file `/etc/systemd/system/invoice-pilot.timer`:
+   ```ini
+   [Unit]
+   Description=Invoice Pilot Monthly Check
+
+   [Timer]
+   OnCalendar=daily
+   Persistent=true
+
+   [Install]
+   WantedBy=timers.target
+   ```
+
+3. Enable and start the timer:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable invoice-pilot.timer
+   sudo systemctl start invoice-pilot.timer
+
+   # Check status
+   sudo systemctl status invoice-pilot.timer
+   ```
+
+### Option 2: Cron Job
+
+Add to your crontab (`crontab -e`):
+
+```cron
+# Run daily at 9 AM
+0 9 * * * cd /path/to/invoice-pilot && /path/to/invoice-pilot/target/release/invoice-pilot scheduled >> /var/log/invoice-pilot.log 2>&1
 ```
 
 ## Troubleshooting
@@ -349,6 +387,7 @@ cargo test
 
 # Run with output
 cargo test -- --nocapture
+```
 
 ### Project Structure
 
@@ -360,16 +399,12 @@ src/
 │   └── drive_auth.rs   # Drive-specific auth
 ├── gmail/              # Gmail API client
 │   ├── client.rs       # HTTP client
-│   ├── search.rs       # Email search
-│   └── attachment.rs   # Attachment download with sender extraction
+│   ├── search.rs       # Email search with bank detection
+│   └── attachment.rs   # Attachment download with sender/bank extraction
 ├── drive/              # Google Drive API client
 │   ├── client.rs       # HTTP client
 │   ├── folder.rs       # Folder management
 │   └── upload.rs       # File upload
-├── gmail/              # Gmail API client
-│   ├── client.rs       # HTTP client
-│   ├── search.rs       # Email search with bank detection
-│   └── attachment.rs   # Attachment download with sender/bank extraction
 ├── scheduler/          # Scheduling logic
 │   └── runner.rs       # Date calculations
 ├── config/             # Configuration
@@ -382,15 +417,9 @@ src/
 ## Security Notes
 
 - Never commit `.env` file or tokens to version control
-- Tokens are stored in `~/.config/invoice-agent/` with user-only permissions
+- Tokens are stored in `~/.config/invoice-pilot/` with user-only permissions
 - OAuth2 uses PKCE for enhanced security
 - All API calls use HTTPS
-
-## License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
-**This software is completely free to use, modify, and distribute for any purpose.**
 
 ## Contributing
 
@@ -428,7 +457,7 @@ We welcome contributions from everyone! This is an open-source project, and we v
 
 ### 📚 Getting Started for Contributors
 
-1. Clone the repository: `git clone <your-fork-url>`
+1. Clone the repository: `git clone https://github.com/adolfousier/invoicepilot.git`
 2. Set up development environment: `cargo build`
 3. Run existing tests: `cargo test`
 4. Make your changes
@@ -437,13 +466,11 @@ We welcome contributions from everyone! This is an open-source project, and we v
 
 Thank you for contributing to Invoice Pilot! 🚀
 
-## Automated Invoice Sending for Services
+## License
 
-### Setting Up Automated Invoice Receipt
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
-Many services like Wise, Revolut, and other digital banks offer automated invoice and statement sending via email. To enable automatic receipt of these documents:
-
-1. **Check Service Settings**: Go to your service provider's settings (Wise, Revolut, Nubank, etc.)
+**This software is completely free to use, modify, and distribute for any purpose.**
 2. **Enable Email Notifications**: Ensure invoice/statement notifications are enabled
 3. **Use Dedicated Email**: Set up a dedicated Gmail account for receiving these documents
 4. **Configure Keywords**: Add relevant keywords to your `TARGET_KEYWORDS_TO_FETCH_AND_DOWNLOAD`
