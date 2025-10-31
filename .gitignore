@@ -5,16 +5,17 @@ IMPLEMENTATION_PLAN.md
 /docker/.env
 
 
-client/target
-client/node_modules
-server/target
+/client/target
+/client/node_modules
+/server/target
 
-plans/
-data/
-server/data/
-data/
-db/
-client/dist
+/plans/
+/data/
+/server/data/
+/data/
+/db/
+/client/dist
+/src/data/logs/
 
 init.sql/
 

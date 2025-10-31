@@ -1,32 +1,109 @@
+mod app;
 mod auth;
 mod cli;
 mod config;
 mod drive;
 mod gmail;
+mod process;
 mod scheduler;
+mod interfaces;
 
 use anyhow::Result;
 use bollard::Docker;
 use chrono::{Datelike, NaiveDate};
-use clap::Parser;
-use cli::args::{AuthAction, Cli, Commands};
+use clap::{Parser, Subcommand};
 use config::env::Config;
+use std::fs;
+use log::{info, warn, error, debug};
+use log4rs;
+
+#[derive(Parser, Debug)]
+#[command(name = "invoice-pilot")]
+#[command(about = "Automated invoice fetcher from Gmail to Google Drive", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Run in interactive TUI mode (default)
+    Tui,
+    /// Run manually (legacy CLI mode)
+    Manual {
+        /// Custom date range in format YYYY-MM-DD:YYYY-MM-DD
+        #[arg(short, long)]
+        date_range: Option<String>,
+    },
+    /// Run in scheduled mode (legacy CLI mode)
+    Scheduled,
+    /// Manage authentication tokens (legacy CLI mode)
+    Auth {
+        #[command(subcommand)]
+        action: AuthAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum AuthAction {
+    /// Re-authenticate Gmail account
+    Gmail,
+    /// Re-authenticate Google Drive account
+    Drive,
+    /// Clear all tokens (force re-authentication for both)
+    Reset,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Create logs directory if it doesn't exist
+    fs::create_dir_all("src/data/logs").ok();
+
     let cli = Cli::parse();
 
-    match cli.command {
+    match cli.command.unwrap_or(Commands::Tui) {
+        Commands::Tui => {
+            // For TUI mode, only log to file if debug logging is enabled
+            // Never log to console to avoid interfering with TUI
+            if let Ok(config) = Config::from_env() {
+                if config.debug_logs_enabled {
+                    let _ = init_file_logging_only();
+                }
+            }
+            // Run the interactive TUI
+            if let Err(e) = interfaces::tui::run_tui().await {
+                eprintln!("TUI error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Commands::Manual { date_range } => {
             run_manual(date_range).await?;
         }
         Commands::Scheduled => {
-            run_scheduled(&cli).await?;
+            run_scheduled_legacy().await?;
         }
         Commands::Auth { action } => {
             handle_auth_command(action).await?;
         }
     }
+
+    Ok(())
+}
+
+/// Initialize logging with only file output (no console) for TUI mode
+fn init_file_logging_only() -> Result<()> {
+    // Create a simple file-only logger configuration
+    let file = log4rs::append::file::FileAppender::builder()
+        .encoder(Box::new(log4rs::encode::pattern::PatternEncoder::new("{d} - {l} - {t} - {m}{n}")))
+        .build("src/data/logs/server.log")?;
+
+    let config = log4rs::config::Config::builder()
+        .appender(log4rs::config::Appender::builder().build("file", Box::new(file)))
+        .build(log4rs::config::Root::builder()
+            .appender("file")
+            .build(log::LevelFilter::Info))?;
+
+    log4rs::init_config(config)?;
 
     Ok(())
 }
@@ -55,7 +132,7 @@ async fn run_manual(date_range: Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn run_scheduled(cli: &Cli) -> Result<()> {
+async fn run_scheduled_legacy() -> Result<()> {
     println!("⏰ Invoice Agent - Scheduled Mode\n");
 
     // Load configuration
@@ -72,21 +149,15 @@ async fn run_scheduled(cli: &Cli) -> Result<()> {
         return Ok(());
     }
 
-    if cli.no_docker {
-        // Run directly (inside container)
-        println!("✓ Today is day {} - running invoice fetch\n", fetch_invoices_day);
+    // Run directly (legacy mode always runs directly)
+    println!("✓ Today is day {} - running invoice fetch\n", fetch_invoices_day);
 
-        // Use previous month range
-        let (start_date, end_date) = scheduler::runner::get_previous_month_range();
-        println!("📅 Date range: {} to {}\n", start_date, end_date);
+    // Use previous month range
+    let (start_date, end_date) = scheduler::runner::get_previous_month_range();
+    println!("📅 Date range: {} to {}\n", start_date, end_date);
 
-        // Execute the invoice fetching pipeline
-        fetch_and_upload_invoices(config, start_date, end_date).await?;
-    } else {
-        // Run in Docker container
-        println!("✓ Today is day {} - running invoice fetch in Docker container\n", fetch_invoices_day);
-        run_in_docker().await?;
-    }
+    // Execute the invoice fetching pipeline
+    fetch_and_upload_invoices(config, start_date, end_date).await?;
 
     println!("\n✅ Scheduled run completed successfully!");
     Ok(())

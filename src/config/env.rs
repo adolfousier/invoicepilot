@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::{Datelike, Local, NaiveDate};
+use log::info;
 use serde::Deserialize;
 use std::env;
 
@@ -23,6 +24,9 @@ pub struct Config {
     // Date range for filtering emails
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
+
+    // Debug logging
+    pub debug_logs_enabled: bool,
 }
 
 impl Config {
@@ -62,6 +66,9 @@ impl Config {
                 .collect(),
             start_date,
             end_date,
+            debug_logs_enabled: env::var("DEBUG_LOGS_ENABLED")
+                .unwrap_or_else(|_| "false".to_string())
+                .to_lowercase() == "true",
         };
 
         config.validate()?;
@@ -84,7 +91,7 @@ impl Config {
                 .context("Failed to calculate last month date")?
         };
 
-        println!("ℹ Using default date range: {} to {}", last_month, today);
+        info!("Using default date range: {} to {}", last_month, today);
         Ok((last_month, today))
     }
 

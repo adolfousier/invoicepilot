@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use log::{info, warn, error};
 use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge,
     RedirectUrl, Scope, TokenUrl,
@@ -56,7 +57,7 @@ pub fn save_token(token_path: &PathBuf, token: &TokenCache) -> Result<()> {
     fs::write(token_path, json)
         .context("Failed to write token file")?;
 
-    println!("✓ Token saved to {}", token_path.display());
+    info!("Token saved to {}", token_path.display());
     Ok(())
 }
 
@@ -91,7 +92,7 @@ pub fn create_oauth_client(
 pub async fn perform_oauth_flow(
     client: &BasicClient,
     scopes: Vec<String>,
-) -> Result<StandardTokenResponse<oauth2::EmptyExtraTokenFields, BasicTokenType>> {
+) -> Result<(StandardTokenResponse<oauth2::EmptyExtraTokenFields, BasicTokenType>, String)> {
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
     // Build authorization URL with scopes
@@ -105,21 +106,17 @@ pub async fn perform_oauth_flow(
 
     let (auth_url, csrf_token) = auth_request.url();
 
-    println!("\n🔐 Please authorize the application by visiting this URL:");
-    println!("\n{}\n", auth_url);
+    // Return the auth URL instead of printing it (for TUI compatibility)
+    let auth_url_str = auth_url.to_string();
 
-    // Try to open browser automatically
-    if webbrowser::open(auth_url.as_str()).is_ok() {
-        println!("✓ Browser opened automatically");
-    } else {
-        println!("⚠ Could not open browser automatically, please copy the URL above");
+    // Try to open the URL in the default browser
+    if let Err(e) = webbrowser::open(&auth_url_str) {
+        warn!("Failed to open browser automatically: {}. Please manually open: {}", e, auth_url_str);
     }
 
     // Start local server to receive callback
     let listener = TcpListener::bind("127.0.0.1:8080")
         .context("Failed to bind to port 8080. Is another instance running?")?;
-
-    println!("⏳ Waiting for authorization callback on http://localhost:8080...\n");
 
     // Wait for connection
     let (mut stream, _) = listener.accept()
@@ -163,8 +160,6 @@ pub async fn perform_oauth_flow(
         </body></html>";
     stream.write_all(response.as_bytes())?;
 
-    println!("✓ Authorization successful, exchanging code for token...");
-
     // Exchange code for token
     let token = client
         .exchange_code(code)
@@ -173,7 +168,7 @@ pub async fn perform_oauth_flow(
         .await
         .context("Failed to exchange authorization code for token")?;
 
-    Ok(token)
+    Ok((token, auth_url_str))
 }
 
 /// Refresh an expired token
@@ -181,7 +176,7 @@ pub async fn refresh_token(
     client: &BasicClient,
     refresh_token: &str,
 ) -> Result<StandardTokenResponse<oauth2::EmptyExtraTokenFields, BasicTokenType>> {
-    println!("🔄 Refreshing expired token...");
+    info!("Refreshing expired token...");
 
     let token = client
         .exchange_refresh_token(&oauth2::RefreshToken::new(refresh_token.to_string()))
@@ -189,7 +184,7 @@ pub async fn refresh_token(
         .await
         .context("Failed to refresh token")?;
 
-    println!("✓ Token refreshed successfully");
+    info!("Token refreshed successfully");
     Ok(token)
 }
 

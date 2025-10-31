@@ -1,3 +1,11 @@
+[![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![Ratatui](https://img.shields.io/badge/ratatui-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://ratatui.rs)
+[![Docker](https://img.shields.io/badge/docker-%23000000.svg?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+[![Make](https://img.shields.io/badge/Make-%23000000.svg?style=for-the-badge&logo=gnu&logoColor=white)](https://www.gnu.org/software/make/)
+[![PostgreSQL](https://img.shields.io/badge/postgresql-%23000000.svg?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org)
+
+[![Invoice Pilot](https://img.shields.io/badge/invoicepilot-7f56da)](https://meetneura.ai) [![Powered by Neura AI](https://img.shields.io/badge/Powered%20by-Neura%20AI-7f56da)](https://meetneura.ai)
+
 # Invoice Pilot
 
 Invoice Pilot is a fully automated invoice and bank statement management tool built with Rust. This project is completely free to use, modify, and distribute under the MIT License.
@@ -137,7 +145,101 @@ cargo build --release
 
 ## Usage
 
-### First-Time Setup
+**🚀 Default Mode**: The interactive TUI is now the default and recommended way to use Invoice Pilot. Simply run `cargo run` with no arguments.
+
+### Interactive TUI Mode (Recommended)
+
+The interactive TUI (Terminal User Interface) provides a user-friendly, guided experience for managing your invoice processing:
+
+```bash
+cargo run
+# or explicitly:
+cargo run -- tui
+```
+
+#### TUI Features
+
+- **4-Panel Dashboard**: Manual Processing, Authentication, Scheduled Mode, and Activity Log
+- **Interactive calendar widget** in Scheduled Mode panel showing current month with highlighted scheduled days
+- **Visual menu navigation** with keyboard controls (Tab to switch panels)
+- **Real-time progress display** during processing with live updates
+- **Interactive date input** with validation (YYYY-MM-DD format)
+- **OAuth authentication flow** with URL display in dedicated popup
+- **Results summary** with detailed breakdowns by bank/institution
+- **Animated authentication status** indicators with progress bars for Gmail and Drive
+- **Context-sensitive help** (press ? for help, Esc for setup guide)
+- **Error handling** with clear error messages and recovery options
+
+#### TUI Navigation
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `Shift+Tab` | Switch between panels |
+| `Enter` | Open configuration popup for current panel |
+| `Esc` | Close popup or quit application |
+| `Q` | Quit application |
+| `?` | Show help or setup guide |
+
+#### Panel-Specific Controls
+
+**Manual Processing Panel:**
+- `Enter`: Start processing or configure dates
+- `R`: Reset dates and results
+- `C`: Cancel processing (when running)
+
+**Authentication Panel:**
+- `G`: Authenticate Gmail account
+- `D`: Authenticate Google Drive account
+- `R`: Reset all authentication tokens
+
+**Scheduled Mode Panel:**
+- **Calendar View**: Shows current month with scheduled day highlighted in yellow
+- `Enter`: Configure scheduled processing day
+- `S`: Trigger manual scheduled run
+
+**Activity Log Panel:**
+- Read-only activity feed with timestamps
+
+#### First-Time TUI Setup
+
+1. **Launch TUI**: Run `cargo run` (no arguments needed)
+2. **Setup Guide**: If no `.env` file exists, press `?` for the setup guide
+3. **Configure Environment**: Follow the setup guide to create your `.env` file
+4. **Authenticate Services**:
+   - Navigate to Authentication panel (Tab key)
+   - Press `G` to authenticate Gmail
+   - Press `D` to authenticate Google Drive
+   - Copy the displayed OAuth URL and complete authorization in browser
+5. **Configure Processing**:
+   - Switch to Manual Processing panel
+   - Press `Enter` to set date range
+   - Use `Tab` to switch between start/end dates
+   - Type dates in YYYY-MM-DD format
+6. **Run Processing**: Press `Enter` in Manual Processing panel to start
+
+#### TUI Workflow
+
+1. **Authentication**: Set up Gmail and Drive access (one-time setup)
+2. **Date Configuration**: Specify the date range for invoice search
+3. **Processing**: Monitor real-time progress as emails are searched and files uploaded
+4. **Results Review**: Check the Activity Log and Manual Processing panels for results
+5. **Scheduled Setup**: Configure automatic monthly processing in Scheduled Mode panel
+
+#### TUI Error Handling
+
+- **Configuration Errors**: Setup guide appears automatically
+- **Authentication Failures**: Clear error messages with retry options
+- **Processing Errors**: Detailed error logs in Activity panel
+- **Network Issues**: Automatic retry with user notification
+- **Invalid Input**: Field validation with helpful error messages
+
+The TUI provides a complete, professional interface for invoice processing with guided setup, real-time feedback, and comprehensive error handling.
+
+### Legacy CLI Mode
+
+For scripting or automation, the original CLI mode is still available:
+
+#### First-Time Setup
 
 On first run, you'll need to authorize both accounts:
 
@@ -152,15 +254,15 @@ This will:
 3. Cache tokens locally at `~/.config/invoice-pilot/`
 4. Fetch invoices from the previous month and upload to Drive
 
-### Manual Execution
+#### Manual Execution
 
-#### Fetch invoices from previous month
+##### Fetch invoices from previous month
 
 ```bash
 cargo run -- manual
 ```
 
-#### Fetch invoices from custom date range
+##### Fetch invoices from custom date range
 
 ```bash
 cargo run -- manual --date-range 2024-09-01:2024-10-12
