@@ -83,7 +83,7 @@ pub async fn run_manual_processing(
     tx.send(format!("Billing month detected: {}", billing_month))?;
 
     let monthly_folder_path = format!("{}/{}", config.drive_folder_path, billing_month);
-    let _monthly_folder_id = drive::folder::find_or_create_folder(&drive_client, &monthly_folder_path, &tx).await?;
+    let _monthly_folder_id = drive::folder::find_or_create_folder(&drive_client, &monthly_folder_path).await?;
 
     // Group attachments by bank name
     let mut bank_groups: HashMap<Option<String>, Vec<gmail::attachment::InvoiceAttachmentWithBank>> = HashMap::new();
@@ -105,7 +105,7 @@ pub async fn run_manual_processing(
             monthly_folder_path.clone()
         };
 
-        let bank_folder_id = drive::folder::find_or_create_folder(&drive_client, &bank_folder_path, &tx).await?;
+        let bank_folder_id = drive::folder::find_or_create_folder(&drive_client, &bank_folder_path).await?;
 
         // Save attachments to temp directory for this bank
         let mut file_paths = Vec::new();
@@ -121,7 +121,7 @@ pub async fn run_manual_processing(
         }
 
         // Upload files to bank-specific folder
-        drive::upload::upload_files(&drive_client, &file_paths, &bank_folder_id, &tx).await?;
+        drive::upload::upload_files(&drive_client, &file_paths, &bank_folder_id, Some(&tx)).await?;
 
         tx.send(format!("    ✓ {}: Files uploaded", bank_display_name))?;
     }

@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use super::client::{DriveClient, DRIVE_API_BASE, FileListResponse, FileMetadata};
-use tokio::sync::mpsc;
 
 const FOLDER_MIME_TYPE: &str = "application/vnd.google-apps.folder";
 
@@ -8,10 +7,7 @@ const FOLDER_MIME_TYPE: &str = "application/vnd.google-apps.folder";
 pub async fn find_or_create_folder(
     client: &DriveClient,
     folder_path: &str,
-    tx: &mpsc::UnboundedSender<String>,
 ) -> Result<String> {
-    let _ = tx.send(format!("📁 Locating folder: {}...", folder_path));
-
     let parts: Vec<&str> = folder_path.split('/').filter(|s| !s.is_empty()).collect();
 
     if parts.is_empty() {
@@ -21,10 +17,9 @@ pub async fn find_or_create_folder(
     let mut parent_id = "root".to_string();
 
     for part in parts {
-        parent_id = find_or_create_single_folder(client, part, &parent_id, tx).await?;
+        parent_id = find_or_create_single_folder(client, part, &parent_id).await?;
     }
 
-    let _ = tx.send(format!("✓ Folder ready: {} (ID: {})", folder_path, parent_id));
     Ok(parent_id)
 }
 
@@ -33,16 +28,13 @@ async fn find_or_create_single_folder(
     client: &DriveClient,
     folder_name: &str,
     parent_id: &str,
-    tx: &mpsc::UnboundedSender<String>,
 ) -> Result<String> {
     // Try to find existing folder
     if let Some(folder_id) = find_folder(client, folder_name, parent_id).await? {
-        let _ = tx.send(format!("   ✓ Found existing folder: {}", folder_name));
         return Ok(folder_id);
     }
 
     // Create new folder
-    let _ = tx.send(format!("   + Creating folder: {}", folder_name));
     create_folder(client, folder_name, parent_id).await
 }
 

@@ -46,9 +46,9 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
 
 fn draw_title() -> Paragraph<'static> {
     Paragraph::new("🚀 Invoice Pilot - Interactive Mode")
-        .style(Style::default().fg(Color::Rgb(0, 100, 100)).add_modifier(Modifier::BOLD))
+        .style(Style::default().fg(Color::Rgb(255, 255, 0)).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Left)
-        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Rgb(0, 100, 100))))
+        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Rgb(255, 255, 0))))
 }
 
 fn draw_footer(app: &App) -> Paragraph<'static> {

@@ -292,7 +292,7 @@ async fn fetch_and_upload_invoices(
         }
         
         // Upload files to bank-specific folder
-        drive::upload::upload_files(&drive_client, &file_paths, &bank_folder_id).await?;
+        drive::upload::upload_files(&drive_client, &file_paths, &bank_folder_id, None).await?;
 
         println!("   ✓ Bank: {} - Files uploaded", bank_display_name);
     }

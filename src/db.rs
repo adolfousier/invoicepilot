@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
-use sqlx::{postgres::PgPoolOptions, Postgres, Pool, Row};
+use sqlx::{postgres::PgPoolOptions, Postgres, Pool, Row as _};
 use std::env;
 
 pub type DbPool = Pool<Postgres>;

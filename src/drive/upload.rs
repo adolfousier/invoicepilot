@@ -10,7 +10,7 @@ pub async fn upload_file(
     file_path: &Path,
     folder_id: &str,
     skip_duplicates: bool,
-    tx: &mpsc::UnboundedSender<String>,
+    tx: Option<&mpsc::UnboundedSender<String>>,
 ) -> Result<UploadedFile> {
     let filename = file_path.file_name()
         .context("Invalid file path")?
@@ -20,12 +20,16 @@ pub async fn upload_file(
     // Check for duplicates if requested
     if skip_duplicates {
         if let Some(existing_file) = find_file_in_folder(client, &filename, folder_id).await? {
-            let _ = tx.send(format!("   ⚠ Skipping duplicate: {} (already exists)", filename));
+            if let Some(tx) = tx {
+                let _ = tx.send(format!("   ⚠ Skipping duplicate: {} (already exists)", filename));
+            }
             return Ok(existing_file);
         }
     }
 
-    let _ = tx.send(format!("   ↑ Uploading: {}...", filename));
+    if let Some(tx) = tx {
+        let _ = tx.send(format!("   ↑ Uploading: {}...", filename));
+    }
 
     let file_data = std::fs::read(file_path)
         .context("Failed to read file")?;
@@ -70,7 +74,9 @@ pub async fn upload_file(
     let uploaded: UploadedFile = response.json().await
         .context("Failed to parse upload response")?;
 
-    let _ = tx.send(format!("   ✓ Uploaded: {} (ID: {})", filename, uploaded.id));
+    if let Some(tx) = tx {
+        let _ = tx.send(format!("   ✓ Uploaded: {} (ID: {})", filename, uploaded.id));
+    }
     Ok(uploaded)
 }
 
@@ -121,7 +127,7 @@ pub async fn upload_files(
     client: &DriveClient,
     file_paths: &[std::path::PathBuf],
     folder_id: &str,
-    tx: &mpsc::UnboundedSender<String>,
+    tx: Option<&mpsc::UnboundedSender<String>>,
 ) -> Result<UploadSummary> {
     for file_path in file_paths {
         match upload_file(client, file_path, folder_id, true, tx).await {
@@ -129,7 +135,9 @@ pub async fn upload_files(
                 // File uploaded successfully
             },
             Err(e) => {
-                let _ = tx.send(format!("   ✗ Failed to upload {}: {}", file_path.display(), e));
+                if let Some(tx) = tx {
+                    let _ = tx.send(format!("   ✗ Failed to upload {}: {}", file_path.display(), e));
+                }
             }
         }
     }
