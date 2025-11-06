@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::{info, warn};
+use log::info;
 use oauth2::TokenResponse;
 use super::oauth::{
     TokenCache, create_oauth_client, get_config_dir, load_token, save_token,

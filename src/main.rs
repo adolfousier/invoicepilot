@@ -2,6 +2,7 @@ mod app;
 mod auth;
 mod cli;
 mod config;
+mod db;
 mod drive;
 mod gmail;
 mod process;
@@ -9,12 +10,10 @@ mod scheduler;
 mod interfaces;
 
 use anyhow::Result;
-use bollard::Docker;
 use chrono::{Datelike, NaiveDate};
 use clap::{Parser, Subcommand};
 use config::env::Config;
 use std::fs;
-use log::{info, warn, error, debug};
 use log4rs;
 
 #[derive(Parser, Debug)]
@@ -163,64 +162,6 @@ async fn run_scheduled_legacy() -> Result<()> {
     Ok(())
 }
 
-async fn run_in_docker() -> Result<()> {
-    let docker = Docker::connect_with_local_defaults()?;
-
-    // Define container config
-    let config = bollard::container::Config {
-        image: Some("invoice-pilot:latest".to_string()),
-        cmd: Some(vec!["scheduled".to_string(), "--no-docker".to_string()]),
-        host_config: Some(bollard::models::HostConfig {
-            binds: Some(vec![
-                ".env:/app/.env".to_string(),
-                format!("{}/.config/invoice-pilot:/root/.config/invoice-pilot", dirs::home_dir().unwrap().display()),
-            ]),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-
-    // Create container
-    let container_name = format!("invoice-pilot-{}", chrono::Utc::now().timestamp());
-    docker.create_container(Some(bollard::container::CreateContainerOptions {
-        name: &container_name,
-        platform: None,
-    }), config).await?;
-
-    // Start container
-    docker.start_container::<&str>(&container_name, None).await?;
-
-    // Wait for completion
-    let wait_options = bollard::container::WaitContainerOptions {
-        condition: "not-running",
-    };
-    let mut wait_stream = docker.wait_container::<&str>(&container_name, Some(wait_options));
-    if let Some(result) = wait_stream.next().await {
-        result?;
-    }
-
-    // Get logs
-    let logs_options = bollard::container::LogsOptions {
-        stdout: true,
-        stderr: true,
-        ..Default::default()
-    };
-    let mut logs_stream = docker.logs::<&str>(&container_name, Some(logs_options));
-    use futures_util::stream::StreamExt;
-    while let Some(log) = logs_stream.next().await {
-        if let Ok(log) = log {
-            print!("{}", log);
-        }
-    }
-
-    // Remove container
-    docker.remove_container(&container_name, None).await?;
-
-    Ok(())
-}
-
-
-
 /// Determine the billing month from the date range
 /// If the range is primarily in one month, use that month
 /// Otherwise, use the end date's month
@@ -318,9 +259,6 @@ async fn fetch_and_upload_invoices(
         bank_groups.entry(attachment.bank_name.clone()).or_insert_with(Vec::new).push(attachment.clone());
     }
 
-    let mut total_uploaded = 0;
-    let mut total_failed = 0;
-    let mut banks_processed = Vec::new();
     let mut all_file_paths = Vec::new();
 
     // 7. Upload files to bank-specific folders
@@ -354,13 +292,9 @@ async fn fetch_and_upload_invoices(
         }
         
         // Upload files to bank-specific folder
-        let bank_summary = drive::upload::upload_files(&drive_client, &file_paths, &bank_folder_id).await?;
-        
-        total_uploaded += bank_summary.uploaded;
-        total_failed += bank_summary.failed;
-        banks_processed.push((bank_display_name.to_string(), bank_summary.clone()));
-        
-        println!("   ✓ Bank summary: {} uploaded, {} failed", bank_summary.uploaded, bank_summary.failed);
+        drive::upload::upload_files(&drive_client, &file_paths, &bank_folder_id).await?;
+
+        println!("   ✓ Bank: {} - Files uploaded", bank_display_name);
     }
 
     // 8. Cleanup temp files
@@ -375,28 +309,7 @@ async fn fetch_and_upload_invoices(
     // Print summary
     println!("\n═══ Summary ═══");
     println!("Total files:    {}", all_file_paths.len());
-    println!("Uploaded:       {}", total_uploaded);
-    println!("Failed:         {}", total_failed);
     println!("Monthly folder: {}", monthly_folder_path);
-    
-    if !banks_processed.is_empty() {
-        println!("\n🏦 Bank breakdown:");
-        for (bank_name, summary) in &banks_processed {
-            if bank_name == "General" {
-                println!("  📄 General documents: {} uploaded, {} failed", summary.uploaded, summary.failed);
-            } else {
-                println!("  🏦 {}: {} uploaded, {} failed", bank_name, summary.uploaded, summary.failed);
-            }
-        }
-    }
-    
-    // Show bank detection statistics
-    let bank_count = banks_processed.iter().filter(|(name, _)| name != &"General").count();
-    if bank_count > 0 {
-        println!("\n✅ Detected {} bank statement(s) from different institutions", bank_count);
-    } else {
-        println!("\nℹ No bank statements detected - only general documents found");
-    }
 
     Ok(())
 }

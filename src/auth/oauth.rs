@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use log::{info, warn, error};
+use log::{info, warn};
 use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, PkceCodeChallenge,
     RedirectUrl, Scope, TokenUrl,

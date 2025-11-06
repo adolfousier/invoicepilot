@@ -9,8 +9,7 @@ pub async fn search_invoices(
     end_date: NaiveDate,
     keywords: &[String],
 ) -> Result<Vec<String>> {
-    println!("🔍 Searching Gmail for invoices and bank statements from {} to {}...", start_date, end_date);
-
+    // Silently search - detailed progress sent via UI
     let keywords_to_search = if keywords.is_empty() {
         vec!["invoice".to_string(), "invoices".to_string(), "fatura".to_string(), "faturas".to_string(), "statement".to_string(), "bank".to_string()]
     } else {
@@ -22,23 +21,20 @@ pub async fn search_invoices(
     // Search for each keyword separately to maximize results
     for keyword in &keywords_to_search {
         let query = build_search_query_single(start_date, end_date, keyword);
-        println!("   Searching for: {}", keyword);
 
         match search_with_query(client, &query).await {
             Ok(message_ids) => {
-                println!("      Found {} message(s)", message_ids.len());
                 for id in message_ids {
                     all_message_ids.insert(id);
                 }
             }
-            Err(e) => {
-                eprintln!("      ✗ Search failed for '{}': {}", keyword, e);
+            Err(_e) => {
+                // Silently skip failed searches
             }
         }
     }
 
     let final_results: Vec<String> = all_message_ids.into_iter().collect();
-    println!("✓ Found {} unique message(s) with potential invoices and bank statements", final_results.len());
     Ok(final_results)
 }
 

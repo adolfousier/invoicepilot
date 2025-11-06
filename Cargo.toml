@@ -30,6 +30,9 @@ webbrowser = "1.0.5"
 ratatui = "0.29.0"
 crossterm = "0.28.1"
 
+# Database dependencies
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-rustls", "chrono"] }
+
 [dev-dependencies]
 mockito = "1.7.0"
 tokio-test = "0.4.4"

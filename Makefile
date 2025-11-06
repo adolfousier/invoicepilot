@@ -36,12 +36,19 @@ help:
 	@echo "Note: Set up Google API credentials in .env file first!"
 
 # Build release binary and run
-run: build
+run: start-db build
 	@echo "Starting Invoice Pilot TUI..."
 	./$(BINARY)
 
+# Start PostgreSQL database
+start-db:
+	@echo "Starting PostgreSQL database..."
+	cd docker && docker-compose -f compose-postgres.yml --env-file .env up -d
+	@echo "Waiting for database to be ready..."
+	@sleep 5
+
 # Run in development mode (faster builds)
-dev:
+dev: start-db
 	@echo "Starting Invoice Pilot in development mode..."
 	cargo run
 

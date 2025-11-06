@@ -1,7 +1,6 @@
 use crate::app::{App, AuthStatus, FocusedPanel, PopupState};
 use crate::process::jobs;
 use crate::interfaces::ui::draw;
-use chrono::NaiveDate;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -21,6 +20,20 @@ pub async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create app and run it
     let mut app = App::new();
+
+    // Initialize database connection
+    match crate::db::init_pool().await {
+        Ok(pool) => {
+            app.db_pool = Some(pool.clone());
+            // Load persisted logs from database
+            if let Err(e) = app.load_persisted_logs().await {
+                eprintln!("Could not load persisted logs: {}", e);
+            }
+        }
+        Err(e) => {
+            eprintln!("Database not available, logs will not persist: {}", e);
+        }
+    }
 
     // Load configuration
     if let Err(e) = app.load_config() {
@@ -140,28 +153,6 @@ async fn run_app<B: Backend>(
                         }
                     }
                 }
-            } else if message.starts_with("__BANK_RESULT__:") {
-                // Parse bank results: BankName:uploaded=3,failed=0
-                let bank_result = message.strip_prefix("__BANK_RESULT__:").unwrap_or("");
-                if let Some(colon_pos) = bank_result.find(':') {
-                    let bank_name = &bank_result[..colon_pos];
-                    let stats = &bank_result[colon_pos + 1..];
-                    let mut uploaded = 0;
-                    let mut failed = 0;
-
-                    for part in stats.split(',') {
-                        let kv: Vec<&str> = part.split('=').collect();
-                        if kv.len() == 2 {
-                            match kv[0] {
-                                "uploaded" => uploaded = kv[1].parse().unwrap_or(0),
-                                "failed" => failed = kv[1].parse().unwrap_or(0),
-                                _ => {}
-                            }
-                        }
-                    }
-
-                    app.bank_breakdown.insert(bank_name.to_string(), crate::app::UploadSummary { uploaded, failed });
-                }
             } else {
                 app.add_progress_message(message);
             }
@@ -200,7 +191,7 @@ async fn run_app<B: Backend>(
                             if !app.is_popup_open() {
                                 // Open popup for current panel
                                 match app.focused_panel {
-                                    FocusedPanel::Manual => app.open_popup(PopupState::DateInput),
+                                    FocusedPanel::Manual => app.open_popup(PopupState::ProcessingConfirm),
                                     FocusedPanel::Auth => {
                                         // For auth panel, start the first unauthenticated service, or allow re-auth
                                         if matches!(app.gmail_auth_status, AuthStatus::NotAuthenticated) {
@@ -213,7 +204,10 @@ async fn run_app<B: Backend>(
                                         }
                                     }
                                     FocusedPanel::Scheduled => app.open_popup(PopupState::ScheduleConfig),
-                                    FocusedPanel::Logs => {} // No popup for logs
+                                    FocusedPanel::Logs => {
+                                        app.logs_scroll_offset = 0;
+                                        app.open_popup(PopupState::DetailedLogs);
+                                    }
                                 }
                             } else {
                                 // Handle popup confirmation
@@ -244,13 +238,13 @@ async fn run_app<B: Backend>(
                         _ => {
                             if app.is_popup_open() {
                                 // Handle popup-specific input
-                                handle_popup_input(app, key.code, &tx);
+                                handle_popup_input(app, key.code);
                             } else {
                                 // Handle panel-specific input
                                 match app.focused_panel {
-                                    FocusedPanel::Manual => handle_manual_input(app, key.code, tx.clone()),
+                                    FocusedPanel::Manual => handle_manual_input(app, key.code),
                                     FocusedPanel::Auth => handle_auth_input(app, key.code, tx.clone()),
-                                    FocusedPanel::Scheduled => handle_scheduled_input(app, key.code, tx.clone()),
+                                    FocusedPanel::Scheduled => handle_scheduled_input(app, key.code),
                                     FocusedPanel::Logs => {} // Logs panel is read-only
                                 }
                             }
@@ -268,7 +262,7 @@ async fn run_app<B: Backend>(
 
 
 
-fn handle_manual_input(app: &mut App, key_code: KeyCode, tx: mpsc::UnboundedSender<String>) {
+fn handle_manual_input(app: &mut App, key_code: KeyCode) {
     if app.is_processing {
         // Only allow canceling during processing
         if key_code == KeyCode::Char('c') || key_code == KeyCode::Char('C') {
@@ -318,7 +312,7 @@ fn handle_manual_input(app: &mut App, key_code: KeyCode, tx: mpsc::UnboundedSend
     }
 }
 
-fn handle_scheduled_input(app: &mut App, key_code: KeyCode, tx: mpsc::UnboundedSender<String>) {
+fn handle_scheduled_input(app: &mut App, key_code: KeyCode) {
     match key_code {
         KeyCode::Enter => {
             // Open schedule configuration popup
@@ -390,7 +384,7 @@ fn handle_popup_tab_navigation(app: &mut App) {
     }
 }
 
-fn handle_popup_input(app: &mut App, key_code: KeyCode, tx: &mpsc::UnboundedSender<String>) {
+fn handle_popup_input(app: &mut App, key_code: KeyCode) {
     match app.popup_state {
         PopupState::DateInput => {
             match key_code {
@@ -467,6 +461,30 @@ fn handle_popup_input(app: &mut App, key_code: KeyCode, tx: &mpsc::UnboundedSend
                 }
             }
         }
+        PopupState::DetailedLogs => {
+            match key_code {
+                KeyCode::Down => {
+                    if app.logs_scroll_offset < app.progress_messages.len().saturating_sub(1) {
+                        app.logs_scroll_offset += 1;
+                    }
+                }
+                KeyCode::Up => {
+                    if app.logs_scroll_offset > 0 {
+                        app.logs_scroll_offset -= 1;
+                    }
+                }
+                KeyCode::PageDown => {
+                    app.logs_scroll_offset = app.logs_scroll_offset.saturating_add(10).min(app.progress_messages.len().saturating_sub(1));
+                }
+                KeyCode::PageUp => {
+                    app.logs_scroll_offset = app.logs_scroll_offset.saturating_sub(10);
+                }
+                KeyCode::Esc => {
+                    app.close_popup();
+                }
+                _ => {}
+            }
+        }
         _ => {} // Other popups don't need input handling
     }
 }
@@ -503,39 +521,13 @@ fn handle_popup_confirm(app: &mut App, tx: &mpsc::UnboundedSender<String>) {
                 app.set_error("Please enter a valid day number".to_string());
             }
         }
-        PopupState::AuthConfirm => {
-            // Start authentication based on current panel
-            match app.focused_panel {
-                FocusedPanel::Auth => {
-                    // Check which auth button was pressed by looking at status
-                    if matches!(app.gmail_auth_status, AuthStatus::NotAuthenticated) {
-                        start_gmail_auth(app, tx.clone());
-                    } else if matches!(app.drive_auth_status, AuthStatus::NotAuthenticated) {
-                        start_drive_auth(app, tx.clone());
-                    }
-                }
-                _ => {
-                    // For other panels, trigger both auths if needed
-                    if matches!(app.gmail_auth_status, AuthStatus::NotAuthenticated) {
-                        start_gmail_auth(app, tx.clone());
-                    }
-                    if matches!(app.drive_auth_status, AuthStatus::NotAuthenticated) {
-                        start_drive_auth(app, tx.clone());
-                    }
-                }
-            }
-            // Keep popup open to show progress
-        }
         PopupState::ProcessingConfirm => {
             app.close_popup();
             // Start processing based on current panel
             match app.focused_panel {
                 FocusedPanel::Manual => {
-                    if app.is_date_input_valid() {
-                        start_manual_processing(app, tx.clone());
-                    } else {
-                        app.set_error("Please configure valid dates first".to_string());
-                    }
+                    // Manual run uses immediate/current processing (previous month like scheduled)
+                    start_immediate_manual_processing(app, tx.clone());
                 }
                 FocusedPanel::Scheduled => {
                     start_scheduled_processing(app, tx.clone());
@@ -547,6 +539,9 @@ fn handle_popup_confirm(app: &mut App, tx: &mpsc::UnboundedSender<String>) {
             app.close_popup();
         }
         PopupState::SetupGuide => {
+            app.close_popup();
+        }
+        PopupState::DetailedLogs => {
             app.close_popup();
         }
         PopupState::GmailAuthUrl | PopupState::DriveAuthUrl => {
@@ -610,35 +605,18 @@ fn start_drive_auth(app: &mut App, tx: mpsc::UnboundedSender<String>) {
     }
 }
 
-fn start_manual_processing(app: &mut App, tx: mpsc::UnboundedSender<String>) {
+fn start_immediate_manual_processing(app: &mut App, tx: mpsc::UnboundedSender<String>) {
     if app.is_processing {
         return; // Already processing
     }
 
-    // Parse dates
-    let start_date = match NaiveDate::parse_from_str(&app.start_date_input, "%Y-%m-%d") {
-        Ok(date) => date,
-        Err(_) => {
-            app.set_error("Invalid start date format. Use YYYY-MM-DD".to_string());
-            return;
-        }
-    };
-
-    let end_date = match NaiveDate::parse_from_str(&app.end_date_input, "%Y-%m-%d") {
-        Ok(date) => date,
-        Err(_) => {
-            app.set_error("Invalid end date format. Use YYYY-MM-DD".to_string());
-            return;
-        }
-    };
-
-    if start_date > end_date {
-        app.set_error("Start date cannot be after end date".to_string());
-        return;
-    }
-
     app.set_processing(true);
     app.add_progress_message("Starting manual invoice processing...".to_string());
+
+    // Get previous month date range for immediate manual processing
+    let (start_date, end_date) = crate::scheduler::runner::get_previous_month_range();
+
+    app.add_progress_message(format!("Processing date range: {} to {}", start_date, end_date));
 
     // Spawn processing task
     let tx_clone = tx.clone();
@@ -646,8 +624,9 @@ fn start_manual_processing(app: &mut App, tx: mpsc::UnboundedSender<String>) {
         let result = jobs::run_manual_processing(start_date, end_date, &tx_clone).await;
         // Send completion signal
         if let Err(e) = result {
-            let _ = tx.send(format!("Error: {}", e));
+            let _ = tx.send(format!("Manual processing error: {}", e));
         }
         let _ = tx.send("__PROCESSING_COMPLETE__".to_string());
     });
 }
+

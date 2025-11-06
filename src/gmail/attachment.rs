@@ -51,9 +51,7 @@ pub async fn get_message_attachments(
         find_attachments(&payload, &mut attachments);
     }
 
-    if attachments.is_empty() {
-        println!("   ⚠ No downloadable attachments found in message");
-    }
+    // Skip silently if no attachments
 
     // Download attachment data
     let mut result = Vec::new();
@@ -76,17 +74,10 @@ pub async fn get_message_attachments(
                     bank_name: bank_name.clone(),
                 };
 
-                // Log bank detection
-                if let Some(ref bank) = bank_name {
-                    println!("   ✓ Downloaded: {} (🏦 Bank: {})", new_filename, bank);
-                } else {
-                    println!("   ✓ Downloaded: {} (📄 General document)", new_filename);
-                }
-
                 result.push(attachment_with_bank);
             }
-            Err(e) => {
-                eprintln!("   ✗ Failed to download {}: {}", filename, e);
+            Err(_e) => {
+                // Skip error logging
             }
         }
     }

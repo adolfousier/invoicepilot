@@ -1,14 +1,6 @@
-use chrono::{NaiveDate, Utc};
-use std::collections::HashMap;
+use chrono::Utc;
 use crate::config::env::Config;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CurrentScreen {
-    MainMenu,
-    Manual,
-    Scheduled,
-    Auth,
-}
+use crate::db::DbPool;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FocusedPanel {
@@ -23,12 +15,12 @@ pub enum PopupState {
     None,
     DateInput,
     ScheduleConfig,
-    AuthConfirm,
     GmailAuthUrl,
     DriveAuthUrl,
     ProcessingConfirm,
     Help,
     SetupGuide,
+    DetailedLogs,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,24 +31,17 @@ pub enum AuthStatus {
     Error(String),
 }
 
-#[derive(Debug, Clone)]
-pub struct UploadSummary {
-    pub uploaded: usize,
-    pub failed: usize,
-}
-
 #[derive(Debug)]
 pub struct App {
-    pub current_screen: CurrentScreen,
     pub focused_panel: FocusedPanel,
     pub popup_state: PopupState,
     pub config: Option<Config>,
+    pub db_pool: Option<DbPool>,
 
     // Manual mode state
     pub start_date_input: String,
     pub end_date_input: String,
     pub date_input_focus: bool, // true = start date, false = end date
-    pub date_cursor_pos: usize,
     pub is_processing: bool,
     pub progress_messages: Vec<String>,
     pub processing_step: Option<String>,
@@ -65,7 +50,6 @@ pub struct App {
     pub total_processed: usize,
     pub total_uploaded: usize,
     pub total_failed: usize,
-    pub bank_breakdown: HashMap<String, UploadSummary>,
     pub billing_month: Option<String>,
     pub drive_folder: Option<String>,
 
@@ -75,7 +59,6 @@ pub struct App {
 
     // Scheduled mode
     pub fetch_invoices_day: Option<u32>,
-    pub next_run_date: Option<NaiveDate>,
     pub schedule_input: String,
 
     // Error handling
@@ -90,57 +73,66 @@ pub struct App {
 
     // Animation state
     pub animation_counter: u32,
+
+    // Detailed logs viewer
+    pub logs_scroll_offset: usize,
 }
 
 impl App {
     pub fn new() -> Self {
         Self {
-            current_screen: CurrentScreen::MainMenu,
             focused_panel: FocusedPanel::Manual,
             popup_state: PopupState::None,
             config: None,
+            db_pool: None,
             start_date_input: String::new(),
             end_date_input: String::new(),
             date_input_focus: true, // Start with start date focused
-            date_cursor_pos: 0,
             is_processing: false,
             progress_messages: Vec::new(),
             processing_step: None,
             total_processed: 0,
             total_uploaded: 0,
             total_failed: 0,
-            bank_breakdown: HashMap::new(),
             billing_month: None,
             drive_folder: None,
             gmail_auth_status: AuthStatus::NotAuthenticated,
             drive_auth_status: AuthStatus::NotAuthenticated,
             fetch_invoices_day: None,
-            next_run_date: None,
             schedule_input: String::new(),
             error_message: None,
             auth_url: None,
             auth_popup_success: false,
             scheduled_job_logged: false,
             animation_counter: 0,
+            logs_scroll_offset: 0,
         }
     }
 
-    pub fn navigate_to(&mut self, screen: CurrentScreen) {
-        self.current_screen = screen;
-        self.error_message = None; // Clear any previous errors
-    }
-
-    pub fn switch_focus(&mut self, panel: FocusedPanel) {
-        self.focused_panel = panel;
-        self.error_message = None; // Clear any previous errors
-    }
-
     pub fn add_progress_message(&mut self, message: String) {
-        self.progress_messages.push(format!("{}: {}", Utc::now().format("%H:%M:%S"), message));
+        let formatted = format!("{}: {}", Utc::now().format("%H:%M:%S"), message);
+        self.progress_messages.push(formatted.clone());
+
+        // Save to database if pool exists
+        if let Some(pool) = &self.db_pool {
+            let pool_clone = pool.clone();
+            tokio::spawn(async move {
+                let _ = crate::db::save_log(&pool_clone, &formatted).await;
+            });
+        }
+
         // Keep only last 100 messages to prevent memory issues
         if self.progress_messages.len() > 100 {
             self.progress_messages.remove(0);
         }
+    }
+
+    pub async fn load_persisted_logs(&mut self) -> anyhow::Result<()> {
+        if let Some(pool) = &self.db_pool {
+            let messages = crate::db::load_logs(pool).await?;
+            self.progress_messages = messages;
+        }
+        Ok(())
     }
 
     pub fn set_processing(&mut self, processing: bool) {
@@ -163,7 +155,6 @@ impl App {
         self.total_processed = 0;
         self.total_uploaded = 0;
         self.total_failed = 0;
-        self.bank_breakdown.clear();
         self.billing_month = None;
         self.drive_folder = None;
     }

@@ -3,7 +3,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, Borders, Clear, List, ListItem, Paragraph, Table, Row, Wrap,
+        Block, Borders, Clear, Paragraph, Wrap,
     },
     Frame,
 };
@@ -175,91 +175,71 @@ fn draw_manual_panel(frame: &mut Frame, app: &mut App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4), // Date range display
-            Constraint::Length(3), // Status
-            Constraint::Min(1),    // Progress/Results
+            Constraint::Ratio(1, 3), // Status area
+            Constraint::Ratio(2, 3), // Progress/Results area
         ])
         .split(inner_area);
 
     // Render the panel border first
     frame.render_widget(panel_block, area);
 
-    // Date range display
-    let date_range_text = if app.is_date_input_valid() {
-        format!("{} to {}", app.start_date_input, app.end_date_input)
-    } else {
-        "Not configured".to_string()
-    };
-
-    let date_display = Paragraph::new(date_range_text)
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).title("Date Range"))
-        .style(if app.is_date_input_valid() {
-            Style::default().fg(Color::Green)
-        } else {
-            Style::default().fg(Color::Red)
-        });
-    frame.render_widget(date_display, chunks[0]);
-
     // Status
     let status = if app.is_processing {
         Paragraph::new("🔄 Processing...")
             .style(Style::default().fg(Color::Yellow))
             .alignment(Alignment::Center)
-            .block(Block::default().borders(Borders::ALL))
+            .block(Block::default().borders(Borders::ALL).title("Status"))
     } else {
         let auth_ok = matches!(app.gmail_auth_status, AuthStatus::Authenticated) &&
                       matches!(app.drive_auth_status, AuthStatus::Authenticated);
-        let auto_scheduled = app.fetch_invoices_day.is_some();
-        let ready = app.is_date_input_valid() && auth_ok;
 
-        let (status_text, status_style) = if ready {
-            ("Ready", Style::default().fg(Color::Green))
-        } else if !auth_ok {
-            ("Auth Required", Style::default().fg(Color::Red))
-        } else if auto_scheduled {
-            ("Auto Scheduled", Style::default().fg(Color::Yellow))
+        let (status_text, status_style) = if auth_ok {
+            ("✅ Ready to Run", Style::default().fg(Color::Green))
         } else {
-            ("Configure Dates", Style::default().fg(Color::Red))
+            ("❌ Auth Required", Style::default().fg(Color::Red))
         };
 
         Paragraph::new(status_text)
             .style(status_style)
             .alignment(Alignment::Center)
-            .block(Block::default().borders(Borders::ALL))
+            .block(Block::default().borders(Borders::ALL).title("Status"))
     };
-    frame.render_widget(status, chunks[1]);
+    frame.render_widget(status, chunks[0]);
 
     // Progress/Results area
     if app.is_processing {
-        // Show progress messages
-        let messages: Vec<ListItem> = app.progress_messages
-            .iter()
-            .rev() // Show newest first
-            .take(5) // Show last 5 messages
-            .map(|msg| ListItem::new(msg.as_str()))
-            .collect();
-
-        let progress_list = List::new(messages)
-            .block(Block::default().borders(Borders::ALL).title("Progress"));
-        frame.render_widget(progress_list, chunks[2]);
+        // Show the latest progress message from Activity Log
+        let current_step = app.progress_messages.last()
+            .map(|msg| msg.as_str())
+            .unwrap_or("Processing...");
+        let progress = Paragraph::new(format!("🔄 {}", current_step))
+            .style(Style::default().fg(Color::Yellow))
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true })
+            .block(Block::default().borders(Borders::ALL).title("Current Step"));
+        frame.render_widget(progress, chunks[1]);
     } else if app.total_processed > 0 {
         // Show results summary
         let summary_text = format!(
-            "✅ Complete\n\n{} processed\n{} uploaded\n{} failed",
+            "✅ Complete\n\n{} processed\n{} uploaded\n{} failed\n\nFolder: {}",
             app.total_processed,
             app.total_uploaded,
-            app.total_failed
+            app.total_failed,
+            app.drive_folder.as_deref().unwrap_or("N/A")
         );
 
         let summary = Paragraph::new(summary_text)
             .style(Style::default().fg(Color::Green))
+            .alignment(Alignment::Center)
             .block(Block::default().borders(Borders::ALL).title("Results"));
-        frame.render_widget(summary, chunks[2]);
+        frame.render_widget(summary, chunks[1]);
     } else {
-        let placeholder = Paragraph::new("")
-            .block(Block::default().borders(Borders::ALL));
-        frame.render_widget(placeholder, chunks[2]);
+        // Show instructions
+        let instructions = Paragraph::new("Press Enter to run manual processing\nfor the previous month\n\nProcesses: Previous month invoices\nUploads: To your Google Drive folders")
+            .style(Style::default().fg(Color::Cyan))
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::ALL).title("Instructions"));
+        frame.render_widget(instructions, chunks[1]);
     }
 }
 
@@ -290,8 +270,10 @@ fn draw_auth_panel(frame: &mut Frame, app: &mut App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4), // Gmail status
-            Constraint::Length(4), // Drive status
+            Constraint::Length(1), // Blank line (top margin)
+            Constraint::Length(3), // Gmail status
+            Constraint::Length(1), // Blank line (spacing)
+            Constraint::Length(3), // Drive status
             Constraint::Min(1),    // Empty space
         ])
         .split(inner_area);
@@ -301,15 +283,15 @@ fn draw_auth_panel(frame: &mut Frame, app: &mut App, area: Rect) {
 
     // Gmail status with animated progress bar
     let gmail_widget = create_auth_progress_bar("Gmail", &app.gmail_auth_status, app.animation_counter, false);
-    frame.render_widget(gmail_widget, chunks[0]);
+    frame.render_widget(gmail_widget, chunks[1]); // Updated from chunks[0]
 
     // Drive status with animated progress bar
     let drive_widget = create_auth_progress_bar("Google Drive", &app.drive_auth_status, app.animation_counter, true);
-    frame.render_widget(drive_widget, chunks[1]);
+    frame.render_widget(drive_widget, chunks[3]); // Updated from chunks[1]
 
     // Empty space
     let empty = Paragraph::new("");
-    frame.render_widget(empty, chunks[2]);
+    frame.render_widget(empty, chunks[4]); // Updated from chunks[2]
 }
 
 fn draw_scheduled_panel(frame: &mut Frame, app: &mut App, area: Rect) {
@@ -365,26 +347,27 @@ fn draw_logs_panel(frame: &mut Frame, app: &mut App, area: Rect) {
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
         });
 
-    // Get the inner area for logs
+    // Get the inner area for logs with margins
     let inner_area = Rect {
-        x: area.x + 1,
-        y: area.y + 1,
-        width: area.width.saturating_sub(2),
-        height: area.height.saturating_sub(2),
+        x: area.x + 3,  // Left margin
+        y: area.y + 2,  // Top margin
+        width: area.width.saturating_sub(4),  // Account for left margin
+        height: area.height.saturating_sub(3), // Reduce height for margin
     };
 
     // Render the panel border first
     frame.render_widget(panel_block, area);
 
-    // Logs
-    let log_items: Vec<ListItem> = app.progress_messages
-        .iter()
-        .rev() // Show newest first
-        .take(10) // Show last 10 messages
-        .map(|msg| ListItem::new(msg.as_str()))
-        .collect();
+    // Display all progress messages with wrapping
+    let mut log_text = String::new();
 
-    let logs = List::new(log_items);
+    for msg in app.progress_messages.iter().rev() {
+        log_text.push_str(&format!("{}\n", msg));
+    }
+
+    let logs = Paragraph::new(log_text)
+        .wrap(Wrap { trim: true })
+        .style(Style::default().fg(Color::White));
     frame.render_widget(logs, inner_area);
 }
 
@@ -392,25 +375,24 @@ fn draw_popup(frame: &mut Frame, app: &mut App) {
     match app.popup_state {
         PopupState::DateInput => draw_date_input_popup(frame, app),
         PopupState::ScheduleConfig => draw_schedule_config_popup(frame, app),
-        PopupState::AuthConfirm => draw_auth_confirm_popup(frame, app),
         PopupState::GmailAuthUrl => draw_gmail_auth_url_popup(frame, app),
         PopupState::DriveAuthUrl => draw_drive_auth_url_popup(frame, app),
         PopupState::ProcessingConfirm => draw_processing_confirm_popup(frame, app),
         PopupState::Help => draw_help_popup(frame),
         PopupState::SetupGuide => draw_setup_guide_popup(frame),
+        PopupState::DetailedLogs => draw_detailed_logs_popup(frame, app),
         PopupState::None => {} // Should not happen
     }
 }
 
 fn create_colored_background(frame: &mut Frame, area: Rect, color: Color) {
-    // Clear the area first to remove background content
-    frame.render_widget(Clear, area);
+    // Create a full clear and solid background block
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default().bg(color));
 
-    // Create a solid colored background with border that fills the entire popup area
-    let background = Paragraph::new("")
-        .style(Style::default().bg(color))
-        .block(Block::default().borders(Borders::ALL));
-    frame.render_widget(background, area);
+    frame.render_widget(Clear, area);
+    frame.render_widget(block, area);
 }
 
 fn draw_date_input_popup(frame: &mut Frame, app: &mut App) {
@@ -518,51 +500,6 @@ fn draw_schedule_config_popup(frame: &mut Frame, app: &mut App) {
     frame.render_widget(controls, chunks[3]);
 }
 
-fn draw_auth_confirm_popup(frame: &mut Frame, app: &mut App) {
-    let area = centered_rect(80, 35, frame.area());
-    create_colored_background(frame, area, Color::Rgb(100, 0, 0)); // Dark Red
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // Title
-            Constraint::Length(8), // Content
-            Constraint::Length(3), // Controls
-        ])
-        .split(area);
-
-    // Title
-    let title = Paragraph::new("🔐 Authentication Required")
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-        .alignment(Alignment::Center);
-    frame.render_widget(title, chunks[0]);
-
-    // Content
-    let content = if app.gmail_auth_status == AuthStatus::Authenticating || app.drive_auth_status == AuthStatus::Authenticating {
-        "🔄 Authentication in progress...\n\n🌐 Please open the authorization URL shown above in your browser.\n\nComplete the Google OAuth flow and return here.\n\nThe application will automatically detect when authentication is complete.".to_string()
-    } else {
-        "Authentication is required to access Google services.\n\nPress Enter to start the OAuth flow.\n\nA browser window will open (or URL will be displayed) for you to authorize access.".to_string()
-    };
-
-    let content_widget = Paragraph::new(content)
-        .style(Style::default().fg(Color::White))
-        .alignment(Alignment::Center)
-        .wrap(Wrap { trim: true });
-    frame.render_widget(content_widget, chunks[1]);
-
-    // Controls
-    let controls_text = if app.gmail_auth_status == AuthStatus::Authenticating || app.drive_auth_status == AuthStatus::Authenticating {
-        "Esc: Close (auth running in background)"
-    } else {
-        "Enter: Start Authentication | Esc: Cancel"
-    };
-
-    let controls = Paragraph::new(controls_text)
-        .style(Style::default().fg(Color::Gray))
-        .alignment(Alignment::Center);
-    frame.render_widget(controls, chunks[2]);
-}
-
 fn draw_processing_confirm_popup(frame: &mut Frame, app: &mut App) {
     let area = centered_rect(60, 30, frame.area());
     create_colored_background(frame, area, Color::Rgb(100, 100, 0)); // Dark Yellow
@@ -577,16 +514,16 @@ fn draw_processing_confirm_popup(frame: &mut Frame, app: &mut App) {
         .split(area);
 
     // Title
-    let title = Paragraph::new("⚠️ Confirm Processing")
+    let title = Paragraph::new("⚡ Confirm Processing")
         .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center);
     frame.render_widget(title, chunks[0]);
 
     // Content
     let content = if matches!(app.focused_panel, FocusedPanel::Scheduled) {
-        "This will process invoices for the previous month.\n\nMake sure authentication is configured and dates are set."
+        "This will process invoices for the previous month.\n\nMake sure authentication is configured."
     } else {
-        "This will search Gmail for invoices and upload them to Google Drive.\n\nMake sure dates are configured and authentication is set up."
+        "This will immediately process invoices for the previous month.\n\nMake sure Gmail and Google Drive authentication are set up."
     };
 
     let content_widget = Paragraph::new(content)
@@ -660,6 +597,68 @@ SHORTCUTS:
         .style(Style::default().fg(Color::Gray))
         .alignment(Alignment::Center);
     frame.render_widget(controls, chunks[2]);
+}
+
+fn draw_detailed_logs_popup(frame: &mut Frame, app: &App) {
+    // Center popup at 50% of screen
+    let area = centered_rect(50, 50, frame.area());
+    create_colored_background(frame, area, Color::Rgb(80, 40, 100)); // Dark purple background
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // Title
+            Constraint::Min(1),    // Logs content
+            Constraint::Length(2), // Help text
+        ])
+        .split(area);
+
+    // Title
+    let title = Paragraph::new("📋 Activity Log Viewer")
+        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center);
+    frame.render_widget(title, chunks[0]);
+
+    // Logs content with scrolling and left margin
+    let display_height = chunks[1].height as usize;
+    let total_messages = app.progress_messages.len();
+
+    let mut visible_logs = String::new();
+    let start_idx = app.logs_scroll_offset.min(total_messages.saturating_sub(1));
+
+    // Display messages from oldest (top) to newest (bottom), but starting from scroll offset
+    let messages_to_show = app.progress_messages.iter()
+        .skip(start_idx)
+        .take(display_height)
+        .collect::<Vec<_>>();
+
+    for msg in messages_to_show {
+        visible_logs.push_str(&format!("  {}\n", msg));  // Add left margin with 2 spaces
+    }
+
+    // Create inner area with left margin
+    let logs_area = Rect {
+        x: chunks[1].x + 2,  // Left margin
+        y: chunks[1].y,
+        width: chunks[1].width.saturating_sub(2),
+        height: chunks[1].height,
+    };
+
+    let logs_widget = Paragraph::new(visible_logs)
+        .style(Style::default().fg(Color::White))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(logs_widget, logs_area);
+
+    // Help text with scroll indicator
+    let scroll_info = format!(
+        "↑/↓ Scroll | PgUp/PgDn Page | Esc Close | [{}/{}]",
+        start_idx + 1,
+        total_messages
+    );
+    let help = Paragraph::new(scroll_info)
+        .style(Style::default().fg(Color::Gray))
+        .alignment(Alignment::Center);
+    frame.render_widget(help, chunks[2]);
 }
 
 fn draw_setup_guide_popup(frame: &mut Frame) {
@@ -817,19 +816,42 @@ fn create_calendar_lines(app: &App, area: Rect) -> Vec<Line<'static>> {
     let bg_color = Color::Rgb(30, 30, 30);
     let panel_width = area.width.saturating_sub(2) as usize; // Subtract borders
     let col_width = panel_width / 7; // Divide evenly across 7 columns
+    let left_padding = 2; // Left margin for content
 
     let mut lines = Vec::new();
 
-    // Title
-    let title = format!("{} {}", month_name, current_year);
-    lines.push(Line::from(vec![Span::styled(format!("{:<width$}", title, width = panel_width), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(bg_color))]));
+    // Blank line at top for margin below panel title
+    let blank_line = vec![Span::styled(" ".repeat(panel_width), Style::default().bg(bg_color))];
+    lines.push(Line::from(blank_line));
 
-    // Weekday headers - centered in each column
+    // Title with left padding using Span objects
+    let title_text = format!("{} {}", month_name, current_year);
+    let title_text_len = title_text.len();
+    let mut title_spans = vec![Span::styled(" ".repeat(left_padding), Style::default().bg(bg_color))];
+    title_spans.push(Span::styled(title_text, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD).bg(bg_color)));
+    // Fill rest of line with bg color
+    let title_line_len: usize = left_padding + title_text_len;
+    if title_line_len < panel_width {
+        title_spans.push(Span::styled(" ".repeat(panel_width - title_line_len), Style::default().bg(bg_color)));
+    }
+    lines.push(Line::from(title_spans));
+
+    // Blank line between title and weekday headers
+    let blank_line = vec![Span::styled(" ".repeat(panel_width), Style::default().bg(bg_color))];
+    lines.push(Line::from(blank_line));
+
+    // Weekday headers - centered in each column with left padding
     let weekdays = vec!["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    let mut weekday_spans = vec![Span::styled(" ".repeat(left_padding), Style::default().bg(bg_color))];
     let weekday_line: Vec<Span> = weekdays.iter()
         .map(|day| Span::styled(format!("{:^width$}", day, width = col_width), Style::default().fg(Color::White).bg(bg_color)))
         .collect();
-    lines.push(Line::from(weekday_line));
+    weekday_spans.extend(weekday_line);
+    lines.push(Line::from(weekday_spans));
+
+    // Blank line after weekday headers for spacing
+    let blank_line = vec![Span::styled(" ".repeat(panel_width), Style::default().bg(bg_color))];
+    lines.push(Line::from(blank_line));
 
     // Get calendar data
     let first_of_month = NaiveDate::from_ymd_opt(current_year, current_month, 1).unwrap();
@@ -854,7 +876,8 @@ fn create_calendar_lines(app: &App, area: Rect) -> Vec<Line<'static>> {
             break;
         }
 
-        let mut week_spans = Vec::new();
+        // Add left padding to week row
+        let mut week_spans = vec![Span::styled(" ".repeat(left_padding), Style::default().bg(bg_color))];
 
         for weekday in 0..7 {
             if (week_count == 0 && weekday < first_weekday) || day > last_of_month.day() {
@@ -881,11 +904,12 @@ fn create_calendar_lines(app: &App, area: Rect) -> Vec<Line<'static>> {
         // Add the week row
         lines.push(Line::from(week_spans));
 
-        // Add blank lines for spacing to fill height
+        // Add blank lines for spacing to fill height (with left padding)
         for _ in 1..spacing_per_week {
-            let blank_line: Vec<Span> = (0..7)
+            let mut blank_line = vec![Span::styled(" ".repeat(left_padding), Style::default().bg(bg_color))];
+            blank_line.extend((0..7)
                 .map(|_| Span::styled(format!("{:<width$}", "", width = col_width), Style::default().bg(bg_color)))
-                .collect();
+                .collect::<Vec<_>>());
             lines.push(Line::from(blank_line));
         }
 
@@ -895,11 +919,12 @@ fn create_calendar_lines(app: &App, area: Rect) -> Vec<Line<'static>> {
         }
     }
 
-    // Fill any remaining height
+    // Fill any remaining height (with left padding)
     while lines.len() < available_height + 2 {
-        let blank_line: Vec<Span> = (0..7)
+        let mut blank_line = vec![Span::styled(" ".repeat(left_padding), Style::default().bg(bg_color))];
+        blank_line.extend((0..7)
             .map(|_| Span::styled(format!("{:<width$}", "", width = col_width), Style::default().bg(bg_color)))
-            .collect();
+            .collect::<Vec<_>>());
         lines.push(Line::from(blank_line));
     }
 
@@ -932,10 +957,11 @@ fn create_auth_progress_bar(title: &str, status: &AuthStatus, animation_counter:
     let filled_bar = "█".repeat(filled_width);
     let empty_bar = "░".repeat(empty_width);
 
-    let progress_text = format!("{} [{}{}] {:.0}%", label, filled_bar, empty_bar, progress_ratio * 100.0);
+    let progress_text = format!("  {} [{}{}] {:.0}%", label, filled_bar, empty_bar, progress_ratio * 100.0);
 
     Paragraph::new(progress_text)
         .style(Style::default().fg(bar_color))
+        .alignment(Alignment::Left)
         .block(Block::default().borders(Borders::ALL).title(title.to_string()).border_style(Style::default().fg(border_color)))
 }
 
