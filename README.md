@@ -1,7 +1,7 @@
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Ratatui](https://img.shields.io/badge/ratatui-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://ratatui.rs)
 [![Docker](https://img.shields.io/badge/docker-%23000000.svg?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
-[![Make](https://img.shields.io/badge/Make-%23000000.svg?style=for-the-badge&logo=gnu&logoColor=white)](https://www.gnu.org/software/make/)
+[![Just](https://img.shields.io/badge/just-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/casey/just)
 [![PostgreSQL](https://img.shields.io/badge/postgresql-%23000000.svg?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org)
 
 [![Invoice Pilot](https://img.shields.io/badge/invoicepilot-7f56da)](https://meetneura.ai) [![Powered by Neura AI](https://img.shields.io/badge/Powered%20by-Neura%20AI-7f56da)](https://meetneura.ai)
@@ -9,6 +9,10 @@
 # Invoice Pilot
 
 Invoice Pilot is a fully automated invoice and bank statement management tool built with Rust. This project is completely free to use, modify, and distribute under the MIT License.
+
+## Demo
+
+![Demo](src/screenshots/invoice-pilot-demo.gif)
 
 ## Table of Contents
 
@@ -58,7 +62,12 @@ Invoice Pilot is a fully automated invoice and bank statement management tool bu
 - Install Rust: <https://rustup.rs/>
 - Cargo will be installed automatically with Rust
 
-### 2. Google Cloud Project Setup
+### 2. Just (Command Runner)
+
+- Install Just: <https://github.com/casey/just#installation>
+- Or: `cargo install just@1.43.0`
+
+### 3. Google Cloud Project Setup
 
 You need **TWO** Google Cloud projects (or one project with two OAuth2 clients):
 
@@ -101,28 +110,39 @@ You need **TWO** Google Cloud projects (or one project with two OAuth2 clients):
 
 ## Installation
 
-### Using Cargo
+### Quick Start with Just
 
 ```bash
 # Clone the repository
 git clone https://github.com/adolfousier/invoicepilot.git
 cd invoice-pilot
 
-# Build the project
-cargo build --release
+# Build and run the project
+just run
 
 # The binary will be at target/release/invoice-pilot
 ```
 
+### Manual Build with Cargo
+
+If you prefer not to use `just`, you can build manually:
+
+```bash
+cargo build --release
+./target/release/invoice-pilot
+```
+
 ## Configuration
 
-1. Copy the example environment file:
+1. Copy the example environment file to the docker directory:
 
    ```bash
-   cp .env.example .env
+   cp .env.example docker/.env
    ```
 
-2. Edit `.env` and fill in your credentials:
+   **Important**: The `.env` file must be placed inside the `docker/` directory for the database and application to work correctly.
+
+2. Edit `docker/.env` and fill in your credentials:
 
    ```env
    # Gmail account credentials (Account A)
@@ -202,7 +222,7 @@ cargo run -- tui
 
 #### First-Time TUI Setup
 
-1. **Launch TUI**: Run `cargo run` (no arguments needed)
+1. **Launch TUI**: Run `just dev` (or `cargo run` if you don't have `just` installed)
 2. **Setup Guide**: If no `.env` file exists, press `?` for the setup guide
 3. **Configure Environment**: Follow the setup guide to create your `.env` file
 4. **Authenticate Services**:
