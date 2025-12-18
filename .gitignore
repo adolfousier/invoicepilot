@@ -17,6 +17,7 @@ IMPLEMENTATION_PLAN.md
 /client/dist
 /src/data/logs/
 commands.md
+src/plans
 
 init.sql/
 

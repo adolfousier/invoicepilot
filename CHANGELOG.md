@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.23] - 2025-12-18
+
+### Changed
+- **OAuth Flow Refactoring**: Consolidated auth URL sending into `perform_oauth_flow` function for cleaner code architecture
+- **Browser Failure Handling**: OAuth flow now detects when browser fails to open and sends notification to TUI
+- **Auth Popup UI**: Removed emojis from authentication popup for cleaner display, changed text alignment to left for better URL readability
+- **Demo Screenshot**: Updated README to use new static demo.png instead of animated GIF
+
+### Added
+- **Browser Failure Notifications**: New `__GMAIL_BROWSER_FAILED__` and `__DRIVE_BROWSER_FAILED__` message handlers in TUI to inform users when automatic browser opening fails
+- **Enhanced Drive Logging**: Added detailed logging for folder search and creation operations in drive/folder.rs
+
+### Fixed
+- **Auth URL Display**: URLs now display with left alignment and no trimming for easier copying
+- **OAuth URL Timing**: Auth URLs are now sent to TUI immediately from the OAuth flow rather than after authorization completes
+
+### Technical Improvements
+- **Code Cleanup**: Refactored `authorize_gmail` and `authorize_drive` to accept optional channel parameter for URL sending
+- **Unified OAuth Handling**: Both Gmail and Drive auth now use consistent pattern with service-specific prefixes (GMAIL_, DRIVE_)
+
 ## [0.1.22] - 2025-11-07
 
 ### Changed

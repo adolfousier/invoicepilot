@@ -137,6 +137,12 @@ async fn run_app<B: Backend>(
             } else if message.starts_with("__DRIVE_AUTH_URL__:") {
                 let url = message.strip_prefix("__DRIVE_AUTH_URL__:").unwrap_or("");
                 app.auth_url = Some(url.to_string());
+            } else if message.starts_with("__GMAIL_BROWSER_FAILED__:") {
+                let error = message.strip_prefix("__GMAIL_BROWSER_FAILED__:").unwrap_or("Browser failed to open");
+                app.add_progress_message(format!("Gmail Auth: {}", error));
+            } else if message.starts_with("__DRIVE_BROWSER_FAILED__:") {
+                let error = message.strip_prefix("__DRIVE_BROWSER_FAILED__:").unwrap_or("Browser failed to open");
+                app.add_progress_message(format!("Drive Auth: {}", error));
             } else if message.starts_with("__RESULTS__:") {
                 // Parse results: processed=5,uploaded=4,failed=1,month=October,folder=Invoices/October
                 let results_str = message.strip_prefix("__RESULTS__:").unwrap_or("");

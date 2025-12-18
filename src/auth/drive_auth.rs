@@ -47,7 +47,7 @@ pub async fn get_drive_token(client_id: String, client_secret: String) -> Result
     }
 
     // Need new authorization
-    let (token, _) = authorize_drive(client_id, client_secret).await?;
+    let (token, _) = authorize_drive(client_id, client_secret, None).await?;
     Ok(token)
 }
 
@@ -92,19 +92,18 @@ pub async fn get_drive_token_with_url(client_id: String, client_secret: String, 
         }
     }
 
-    // Need new authorization - send URL first, then proceed
-    let (token, auth_url) = authorize_drive(client_id, client_secret).await?;
-    // Send the auth URL to the TUI
-    let _ = tx.send(format!("__DRIVE_AUTH_URL__:{}", auth_url));
+    // Need new authorization - URL will be sent via channel from perform_oauth_flow
+    let (token, _auth_url) = authorize_drive(client_id, client_secret, Some(tx)).await?;
     Ok(token)
 }
 
 /// Perform full Drive authorization flow
-async fn authorize_drive(client_id: String, client_secret: String) -> Result<(String, String)> {
+async fn authorize_drive(client_id: String, client_secret: String, tx: Option<tokio::sync::mpsc::UnboundedSender<String>>) -> Result<(String, String)> {
     let client = create_oauth_client(client_id, client_secret)?;
     let scopes = vec![DRIVE_SCOPE.to_string()];
 
-    let (token, auth_url) = perform_oauth_flow(&client, scopes).await?;
+    let sender_with_prefix = tx.map(|sender| (sender, "DRIVE_"));
+    let (token, auth_url) = perform_oauth_flow(&client, scopes, sender_with_prefix).await?;
 
     let expires_at = token.expires_in()
         .map(|d| chrono::Utc::now().timestamp() + d.as_secs() as i64);

@@ -749,11 +749,11 @@ fn draw_specific_auth_url_popup(frame: &mut Frame, app: &mut App, service_name: 
 
     // Title
     let title = if app.auth_popup_success {
-        Paragraph::new(format!("✅ {} Authenticated", service_name))
+        Paragraph::new(format!("{} Authenticated", service_name))
             .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
             .alignment(Alignment::Center)
     } else {
-        Paragraph::new(format!("🔐 Authenticate {}", service_name))
+        Paragraph::new(format!("Authenticate {}", service_name))
             .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
             .alignment(Alignment::Center)
     };
@@ -761,24 +761,25 @@ fn draw_specific_auth_url_popup(frame: &mut Frame, app: &mut App, service_name: 
 
     // Content display
     let content_text = if app.auth_popup_success {
-        format!("🎉 {} authentication completed successfully!\n\nYour tokens are cached and ready to use.", service_name)
+        format!("{} authentication completed successfully!\n\nYour tokens are cached and ready to use.", service_name)
     } else if let Some(url) = &app.auth_url {
-        format!("🌐 {} Authorization URL:\n\n{}", service_name, url)
+        format!("{} Authorization URL:\n\n{}", service_name, url)
     } else {
-        format!("🔄 Preparing {} authorization URL...\n\nPlease wait while we set up the OAuth flow.", service_name)
+        format!("Preparing {} authorization URL...\n\nPlease wait while we set up the OAuth flow.", service_name)
     };
 
     let content_display = Paragraph::new(content_text)
         .style(Style::default().fg(Color::White))
-        .alignment(Alignment::Center)
-        .wrap(Wrap { trim: true });
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: false })
+        .scroll((0, 0));
     frame.render_widget(content_display, chunks[1]);
 
     // Instructions
     let instructions = if app.auth_popup_success {
-        format!("📋 Your {} authentication is active.\nYou can now close this popup or clear tokens if needed.", service_name)
+        format!("Your {} authentication is active.\nYou can now close this popup or clear tokens if needed.", service_name)
     } else {
-        format!("📋 INSTRUCTIONS:\n• Copy the URL above\n• Open it in your web browser\n• Complete the Google OAuth flow for {}\n• Return here when done\n• The app will detect completion automatically", service_name)
+        format!("INSTRUCTIONS:\n- Copy the URL above\n- Open it in your web browser\n- Complete the Google OAuth flow for {}\n- Return here when done\n- The app will detect completion automatically", service_name)
     };
 
     let instructions_widget = Paragraph::new(instructions)

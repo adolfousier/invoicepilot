@@ -29,12 +29,16 @@ async fn find_or_create_single_folder(
     folder_name: &str,
     parent_id: &str,
 ) -> Result<String> {
+    log::info!("Looking for folder '{}' in parent '{}'", folder_name, parent_id);
+
     // Try to find existing folder
     if let Some(folder_id) = find_folder(client, folder_name, parent_id).await? {
+        log::info!("Found existing folder '{}' with ID: {}", folder_name, folder_id);
         return Ok(folder_id);
     }
 
     // Create new folder
+    log::info!("Folder '{}' not found, creating new one", folder_name);
     create_folder(client, folder_name, parent_id).await
 }
 
@@ -50,6 +54,8 @@ async fn find_folder(
         parent_id,
         FOLDER_MIME_TYPE
     );
+
+    log::debug!("Drive search query: {}", query);
 
     let url = format!("{}/files", DRIVE_API_BASE);
 
@@ -70,7 +76,15 @@ async fn find_folder(
     let result: FileListResponse = response.json().await
         .context("Failed to parse folder search response")?;
 
-    Ok(result.files.and_then(|files| files.first().map(|f| f.id.clone())))
+    let folder_id = result.files.and_then(|files| {
+        log::debug!("Found {} folders matching search", files.len());
+        files.first().map(|f| {
+            log::debug!("Using folder: name='{}', id='{}'", f.name, f.id);
+            f.id.clone()
+        })
+    });
+
+    Ok(folder_id)
 }
 
 /// Create a new folder

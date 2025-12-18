@@ -92,6 +92,7 @@ pub fn create_oauth_client(
 pub async fn perform_oauth_flow(
     client: &BasicClient,
     scopes: Vec<String>,
+    url_sender: Option<(tokio::sync::mpsc::UnboundedSender<String>, &str)>,
 ) -> Result<(StandardTokenResponse<oauth2::EmptyExtraTokenFields, BasicTokenType>, String)> {
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
@@ -110,8 +111,23 @@ pub async fn perform_oauth_flow(
     let auth_url_str = auth_url.to_string();
 
     // Try to open the URL in the default browser
-    if let Err(e) = webbrowser::open(&auth_url_str) {
-        warn!("Failed to open browser automatically: {}. Please manually open: {}", e, auth_url_str);
+    let browser_opened = webbrowser::open(&auth_url_str).is_ok();
+
+    if !browser_opened {
+        warn!("Failed to open browser automatically. Please manually open: {}", auth_url_str);
+    }
+
+    info!("Authorization URL ready: {}", auth_url_str);
+
+    // Send URL and browser status to TUI if sender is provided
+    if let Some((sender, prefix)) = url_sender {
+        // Always send the URL first so user can manually open it
+        let _ = sender.send(format!("__{}AUTH_URL__:{}", prefix, auth_url_str));
+
+        // If browser didn't open, send a notification
+        if !browser_opened {
+            let _ = sender.send(format!("__{}BROWSER_FAILED__:Failed to open browser automatically. Please copy and open the URL above manually.", prefix));
+        }
     }
 
     // Start local server to receive callback

@@ -12,7 +12,7 @@ Invoice Pilot is a fully automated invoice and bank statement management tool bu
 
 ## Demo
 
-![Demo](src/screenshots/invoice-pilot-demo.gif)
+![Demo](src/screenshots/demo.png)
 
 ## Table of Contents
 
