@@ -18,14 +18,13 @@ pub async fn upload_file(
         .to_string();
 
     // Check for duplicates if requested
-    if skip_duplicates {
-        if let Some(existing_file) = find_file_in_folder(client, &filename, folder_id).await? {
+    if skip_duplicates
+        && let Some(existing_file) = find_file_in_folder(client, &filename, folder_id).await? {
             if let Some(tx) = tx {
                 let _ = tx.send(format!("   ⚠ Skipping duplicate: {} (already exists)", filename));
             }
             return Ok(existing_file);
         }
-    }
 
     if let Some(tx) = tx {
         let _ = tx.send(format!("   ↑ Uploading: {}...", filename));
@@ -109,15 +108,14 @@ async fn find_file_in_folder(
     let result: FileListResponse = response.json().await
         .context("Failed to parse file search response")?;
 
-    if let Some(files) = result.files {
-        if let Some(file) = files.first() {
+    if let Some(files) = result.files
+        && let Some(file) = files.first() {
             return Ok(Some(UploadedFile {
                 id: file.id.clone(),
                 name: file.name.clone(),
                 web_view_link: None,
             }));
         }
-    }
 
     Ok(None)
 }

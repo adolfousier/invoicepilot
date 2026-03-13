@@ -34,11 +34,10 @@ impl Config {
     pub fn from_env() -> Result<Self> {
         // Load .env file from multiple possible locations
         // Priority: 1. Current directory, 2. docker/.env, 3. Parent directory
-        if dotenvy::dotenv().is_err() {
-            if dotenvy::from_path("docker/.env").is_err() {
+        if dotenvy::dotenv().is_err()
+            && dotenvy::from_path("docker/.env").is_err() {
                 dotenvy::from_path("../.env").ok();
             }
-        }
 
         // Parse date range
         let (start_date, end_date) = Self::parse_date_range()?;
@@ -97,11 +96,10 @@ impl Config {
 
     /// Validate configuration values
     fn validate(&self) -> Result<()> {
-        if let Some(day) = self.fetch_invoices_day {
-            if day < 1 || day > 31 {
+        if let Some(day) = self.fetch_invoices_day
+            && !(1..=31).contains(&day) {
                 anyhow::bail!("FETCH_INVOICES_DAY must be between 1 and 31");
             }
-        }
 
         if self.gmail_client_id.is_empty() {
             anyhow::bail!("GOOGLE_GMAIL_CLIENT_ID cannot be empty");

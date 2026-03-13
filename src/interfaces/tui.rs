@@ -143,6 +143,18 @@ async fn run_app<B: Backend>(
             } else if message.starts_with("__DRIVE_BROWSER_FAILED__:") {
                 let error = message.strip_prefix("__DRIVE_BROWSER_FAILED__:").unwrap_or("Browser failed to open");
                 app.add_progress_message(format!("Drive Auth: {}", error));
+            } else if message.starts_with("__CATCHUP_RESULTS__:") {
+                let results_str = message.strip_prefix("__CATCHUP_RESULTS__:").unwrap_or("");
+                for part in results_str.split(',') {
+                    let kv: Vec<&str> = part.split('=').collect();
+                    if kv.len() == 2 {
+                        match kv[0] {
+                            "total_missing" => app.catchup_total_missing = kv[1].parse().unwrap_or(0),
+                            "processed" => app.catchup_total_processed = kv[1].parse().unwrap_or(0),
+                            _ => {}
+                        }
+                    }
+                }
             } else if message.starts_with("__RESULTS__:") {
                 // Parse results: processed=5,uploaded=4,failed=1,month=October,folder=Invoices/October
                 let results_str = message.strip_prefix("__RESULTS__:").unwrap_or("");
@@ -164,9 +176,9 @@ async fn run_app<B: Backend>(
             }
         }
 
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press {
                     // Handle global keys
                     match key.code {
                         KeyCode::Tab => {
@@ -257,8 +269,6 @@ async fn run_app<B: Backend>(
                         }
                     }
                 }
-            }
-        }
     }
 
     Ok(())
@@ -289,6 +299,10 @@ fn handle_manual_input(app: &mut App, key_code: KeyCode) {
         KeyCode::Char('r') | KeyCode::Char('R') => {
             // Reset dates
             app.reset_manual_inputs();
+        }
+        KeyCode::Char('c') | KeyCode::Char('C') => {
+            // Catchup: detect and process missing months
+            app.open_popup(PopupState::CatchupConfirm);
         }
         // Handle date input - append to current focused field
         KeyCode::Char(c) => {
@@ -403,10 +417,8 @@ fn handle_popup_input(app: &mut App, key_code: KeyCode) {
                             if app.start_date_input.len() < 10 {
                                 app.start_date_input.push(c);
                             }
-                        } else {
-                            if app.end_date_input.len() < 10 {
-                                app.end_date_input.push(c);
-                            }
+                        } else if app.end_date_input.len() < 10 {
+                            app.end_date_input.push(c);
                         }
                     }
                 }
@@ -515,7 +527,7 @@ fn handle_popup_confirm(app: &mut App, tx: &mpsc::UnboundedSender<String>) {
         }
         PopupState::ScheduleConfig => {
             if let Ok(day) = app.schedule_input.parse::<u32>() {
-                if day >= 1 && day <= 31 {
+                if (1..=31).contains(&day) {
                     app.fetch_invoices_day = Some(day);
                     app.scheduled_job_logged = false; // Reset logging flag when schedule changes
                     app.close_popup();
@@ -540,6 +552,10 @@ fn handle_popup_confirm(app: &mut App, tx: &mpsc::UnboundedSender<String>) {
                 }
                 _ => {}
             }
+        }
+        PopupState::CatchupConfirm => {
+            app.close_popup();
+            start_catchup_processing(app, tx.clone());
         }
         PopupState::Help => {
             app.close_popup();
@@ -609,6 +625,26 @@ fn start_drive_auth(app: &mut App, tx: mpsc::UnboundedSender<String>) {
     } else {
         app.set_error("Configuration not loaded - cannot authenticate".to_string());
     }
+}
+
+fn start_catchup_processing(app: &mut App, tx: mpsc::UnboundedSender<String>) {
+    if app.is_processing {
+        return;
+    }
+
+    app.set_processing(true);
+    app.catchup_total_missing = 0;
+    app.catchup_total_processed = 0;
+    app.add_progress_message("Starting catchup: detecting missing months on Drive...".to_string());
+
+    let tx_clone = tx.clone();
+    tokio::spawn(async move {
+        let result = jobs::run_catchup_processing(&tx_clone).await;
+        if let Err(e) = result {
+            let _ = tx.send(format!("Catchup processing error: {}", e));
+        }
+        let _ = tx.send("__PROCESSING_COMPLETE__".to_string());
+    });
 }
 
 fn start_immediate_manual_processing(app: &mut App, tx: mpsc::UnboundedSender<String>) {

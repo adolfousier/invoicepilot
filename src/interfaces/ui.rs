@@ -67,9 +67,9 @@ fn draw_footer(app: &App) -> Paragraph<'static> {
         match app.focused_panel {
             FocusedPanel::Manual => {
                 if app.is_processing {
-                    "C: Cancel Processing"
+                    "Processing..."
                 } else {
-                    "Enter: Run | R: Reset | Type: Input Dates"
+                    "Enter: Run | C: Catchup Missing | R: Reset"
                 }
             }
             FocusedPanel::Auth => "G: Gmail Auth | D: Drive Auth | C/R: Clear All",
@@ -235,7 +235,7 @@ fn draw_manual_panel(frame: &mut Frame, app: &mut App, area: Rect) {
         frame.render_widget(summary, chunks[1]);
     } else {
         // Show instructions
-        let instructions = Paragraph::new("Press Enter to run manual processing\nfor the previous month\n\nProcesses: Previous month invoices\nUploads: To your Google Drive folders")
+        let instructions = Paragraph::new("Enter: Process previous month\nC: Catchup missing months\n\nCatchup scans your Drive folders\nand processes any missing months")
             .style(Style::default().fg(Color::Cyan))
             .alignment(Alignment::Center)
             .block(Block::default().borders(Borders::ALL).title("Instructions"));
@@ -322,13 +322,12 @@ fn draw_scheduled_panel(frame: &mut Frame, app: &mut App, area: Rect) {
                   matches!(app.drive_auth_status, AuthStatus::Authenticated);
     let configured = app.fetch_invoices_day.is_some();
 
-    if auth_ok && configured && !app.scheduled_job_logged {
-        if let Some(day) = app.fetch_invoices_day {
+    if auth_ok && configured && !app.scheduled_job_logged
+        && let Some(day) = app.fetch_invoices_day {
             app.add_progress_message(format!("🔄 Automatic job scheduled: Will run on day {} of each month when triggered", day));
             info!("Scheduled job configured: Will run on day {} of each month", day);
             app.scheduled_job_logged = true;
         }
-    }
 }
 
 fn draw_logs_panel(frame: &mut Frame, app: &mut App, area: Rect) {
@@ -378,6 +377,7 @@ fn draw_popup(frame: &mut Frame, app: &mut App) {
         PopupState::GmailAuthUrl => draw_gmail_auth_url_popup(frame, app),
         PopupState::DriveAuthUrl => draw_drive_auth_url_popup(frame, app),
         PopupState::ProcessingConfirm => draw_processing_confirm_popup(frame, app),
+        PopupState::CatchupConfirm => draw_catchup_confirm_popup(frame, app),
         PopupState::Help => draw_help_popup(frame),
         PopupState::SetupGuide => draw_setup_guide_popup(frame),
         PopupState::DetailedLogs => draw_detailed_logs_popup(frame, app),
@@ -539,6 +539,45 @@ fn draw_processing_confirm_popup(frame: &mut Frame, app: &mut App) {
     frame.render_widget(controls, chunks[2]);
 }
 
+fn draw_catchup_confirm_popup(frame: &mut Frame, app: &mut App) {
+    let area = centered_rect(65, 35, frame.area());
+    create_colored_background(frame, area, Color::Rgb(0, 80, 80)); // Dark Teal
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Title
+            Constraint::Length(7), // Content
+            Constraint::Length(3), // Controls
+        ])
+        .split(area);
+
+    let title = Paragraph::new("🔍 Catchup Missing Months")
+        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center);
+    frame.render_widget(title, chunks[0]);
+
+    let folder_path = app.config.as_ref()
+        .map(|c| c.drive_folder_path.as_str())
+        .unwrap_or("(not configured)");
+
+    let content = format!(
+        "This will scan your Google Drive folder:\n  {}\n\nDetect any missing month folders, and\nautomatically fetch & upload invoices for each.",
+        folder_path
+    );
+
+    let content_widget = Paragraph::new(content)
+        .style(Style::default().fg(Color::White))
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true });
+    frame.render_widget(content_widget, chunks[1]);
+
+    let controls = Paragraph::new("Enter: Start Catchup | Esc: Cancel")
+        .style(Style::default().fg(Color::Gray))
+        .alignment(Alignment::Center);
+    frame.render_widget(controls, chunks[2]);
+}
+
 fn draw_help_popup(frame: &mut Frame) {
     let area = centered_rect(80, 60, frame.area());
     create_colored_background(frame, area, Color::Rgb(100, 0, 100)); // Dark Magenta
@@ -581,7 +620,7 @@ SETUP:
 5. Run processing or set up scheduling
 
 SHORTCUTS:
-• Manual Panel: Enter to run processing, R to reset
+• Manual Panel: Enter to run, C to catchup missing, R to reset
 • Auth Panel: G for Gmail auth, D for Drive auth, R to reset
 • Scheduled Panel: S for manual trigger, Enter to configure
 • Log Panel: Read-only activity feed"#;
@@ -842,7 +881,7 @@ fn create_calendar_lines(app: &App, area: Rect) -> Vec<Line<'static>> {
     lines.push(Line::from(blank_line));
 
     // Weekday headers - centered in each column with left padding
-    let weekdays = vec!["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     let mut weekday_spans = vec![Span::styled(" ".repeat(left_padding), Style::default().bg(bg_color))];
     let weekday_line: Vec<Span> = weekdays.iter()
         .map(|day| Span::styled(format!("{:^width$}", day, width = col_width), Style::default().fg(Color::White).bg(bg_color)))
@@ -884,7 +923,7 @@ fn create_calendar_lines(app: &App, area: Rect) -> Vec<Line<'static>> {
             if (week_count == 0 && weekday < first_weekday) || day > last_of_month.day() {
                 week_spans.push(Span::styled(format!("{:<width$}", "", width = col_width), Style::default().bg(bg_color)));
             } else {
-                let is_scheduled = app.fetch_invoices_day.map_or(false, |d| d == day as u32);
+                let is_scheduled = app.fetch_invoices_day == Some(day);
                 let is_today = now.day() == day && now.month() == current_month && now.year() == current_year;
 
                 let style = if is_scheduled && is_today {

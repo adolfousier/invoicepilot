@@ -7,11 +7,10 @@ pub type DbPool = Pool<Postgres>;
 
 pub async fn init_pool() -> Result<DbPool> {
     // Load .env file from multiple locations (same as config does)
-    if dotenvy::dotenv().is_err() {
-        if dotenvy::from_path("docker/.env").is_err() {
+    if dotenvy::dotenv().is_err()
+        && dotenvy::from_path("docker/.env").is_err() {
             dotenvy::from_path("../.env").ok();
         }
-    }
 
     let database_url = match env::var("DATABASE_URL") {
         Ok(url) => url,

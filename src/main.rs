@@ -14,7 +14,6 @@ use chrono::{Datelike, NaiveDate};
 use clap::{Parser, Subcommand};
 use config::env::Config;
 use std::fs;
-use log4rs;
 
 #[derive(Parser, Debug)]
 #[command(name = "invoice-pilot")]
@@ -64,11 +63,10 @@ async fn main() -> Result<()> {
         Commands::Tui => {
             // For TUI mode, only log to file if debug logging is enabled
             // Never log to console to avoid interfering with TUI
-            if let Ok(config) = Config::from_env() {
-                if config.debug_logs_enabled {
+            if let Ok(config) = Config::from_env()
+                && config.debug_logs_enabled {
                     let _ = init_file_logging_only();
                 }
-            }
             // Run the interactive TUI
             if let Err(e) = interfaces::tui::run_tui().await {
                 eprintln!("TUI error: {}", e);
@@ -172,7 +170,7 @@ fn determine_billing_month(start_date: NaiveDate, end_date: NaiveDate) -> String
 
     if start_month == end_month {
         // Same month - use it
-        format!("{}", chrono::Month::try_from(end_month as u8).unwrap().name())
+        chrono::Month::try_from(end_month as u8).unwrap().name().to_string()
     } else {
         // Different months - check if it's primarily last month billing
         let days_in_end_month = (end_date - NaiveDate::from_ymd_opt(end_date.year(), end_date.month(), 1).unwrap()).num_days() + 1;
@@ -180,9 +178,9 @@ fn determine_billing_month(start_date: NaiveDate, end_date: NaiveDate) -> String
 
         // If we're early in the end month (less than 15 days), it's likely previous month billing
         if days_in_end_month < 15 && total_days > 20 {
-            format!("{}", chrono::Month::try_from(start_month as u8).unwrap().name())
+            chrono::Month::try_from(start_month as u8).unwrap().name().to_string()
         } else {
-            format!("{}", chrono::Month::try_from(end_month as u8).unwrap().name())
+            chrono::Month::try_from(end_month as u8).unwrap().name().to_string()
         }
     }
 }
@@ -256,7 +254,7 @@ async fn fetch_and_upload_invoices(
     // Group attachments by bank name
     let mut bank_groups: std::collections::HashMap<Option<String>, Vec<gmail::attachment::InvoiceAttachmentWithBank>> = std::collections::HashMap::new();
     for attachment in &all_attachments {
-        bank_groups.entry(attachment.bank_name.clone()).or_insert_with(Vec::new).push(attachment.clone());
+        bank_groups.entry(attachment.bank_name.clone()).or_default().push(attachment.clone());
     }
 
     let mut all_file_paths = Vec::new();

@@ -18,6 +18,7 @@ pub enum PopupState {
     GmailAuthUrl,
     DriveAuthUrl,
     ProcessingConfirm,
+    CatchupConfirm,
     Help,
     SetupGuide,
     DetailedLogs,
@@ -52,6 +53,10 @@ pub struct App {
     pub total_failed: usize,
     pub billing_month: Option<String>,
     pub drive_folder: Option<String>,
+
+    // Catchup state
+    pub catchup_total_missing: usize,
+    pub catchup_total_processed: usize,
 
     // Auth status
     pub gmail_auth_status: AuthStatus,
@@ -96,6 +101,8 @@ impl App {
             total_failed: 0,
             billing_month: None,
             drive_folder: None,
+            catchup_total_missing: 0,
+            catchup_total_processed: 0,
             gmail_auth_status: AuthStatus::NotAuthenticated,
             drive_auth_status: AuthStatus::NotAuthenticated,
             fetch_invoices_day: None,

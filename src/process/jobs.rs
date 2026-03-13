@@ -88,7 +88,7 @@ pub async fn run_manual_processing(
     // Group attachments by bank name
     let mut bank_groups: HashMap<Option<String>, Vec<gmail::attachment::InvoiceAttachmentWithBank>> = HashMap::new();
     for attachment in &all_attachments {
-        bank_groups.entry(attachment.bank_name.clone()).or_insert_with(Vec::new).push(attachment.clone());
+        bank_groups.entry(attachment.bank_name.clone()).or_default().push(attachment.clone());
     }
 
     tx.send("⬆️ Uploading to Google Drive...".to_string())?;
@@ -121,7 +121,7 @@ pub async fn run_manual_processing(
         }
 
         // Upload files to bank-specific folder
-        drive::upload::upload_files(&drive_client, &file_paths, &bank_folder_id, Some(&tx)).await?;
+        drive::upload::upload_files(&drive_client, &file_paths, &bank_folder_id, Some(tx)).await?;
 
         tx.send(format!("    ✓ {}: Files uploaded", bank_display_name))?;
     }
@@ -130,11 +130,10 @@ pub async fn run_manual_processing(
     tx.send("Cleaning up temporary files...".to_string())?;
 
     for attachment in &all_attachments {
-        if let Ok(path) = gmail::attachment::save_attachment_to_temp(&attachment.attachment) {
-            if let Err(e) = std::fs::remove_file(&path) {
+        if let Ok(path) = gmail::attachment::save_attachment_to_temp(&attachment.attachment)
+            && let Err(e) = std::fs::remove_file(&path) {
                 tx.send(format!("Failed to remove temp file {}: {}", path.display(), e))?;
             }
-        }
     }
 
     // Send completion summary
@@ -146,21 +145,158 @@ pub async fn run_manual_processing(
     Ok(())
 }
 
+/// Detect missing months on Google Drive and process them
+pub async fn run_catchup_processing(
+    tx: &mpsc::UnboundedSender<String>,
+) -> Result<Vec<String>> {
+    tx.send("Loading configuration...".to_string())?;
+    let config = Config::from_env()?;
+
+    tx.send("Authenticating with Google Drive...".to_string())?;
+    let drive_token = crate::auth::drive_auth::get_drive_token(
+        config.drive_client_id.clone(),
+        config.drive_client_secret.clone(),
+    )
+    .await?;
+    let drive_client = drive::client::DriveClient::new(drive_token);
+
+    // Determine which year folders to check based on drive_folder_path
+    // e.g., "Neura-AI-Billing/All-Expenses/2025" -> check 2025
+    // We'll check the current year and previous year if we're in January
+    let now = chrono::Utc::now();
+    let current_year = now.year();
+    let current_month = now.month();
+
+    // Extract the base path (without year) and the year from config
+    let folder_path = &config.drive_folder_path;
+
+    // Try to detect year in the path, otherwise use current year
+    let (base_path, years_to_check) = parse_folder_years(folder_path, current_year, current_month);
+
+    let all_months = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    ];
+
+    let mut missing_months: Vec<(i32, u32, String)> = Vec::new(); // (year, month_num, month_name)
+
+    for year in &years_to_check {
+        let year_folder_path = format!("{}/{}", base_path, year);
+        tx.send(format!("🔍 Checking Drive folder: {}", year_folder_path))?;
+
+        let existing_folders = drive::folder::list_subfolders(&drive_client, &year_folder_path).await?;
+        tx.send(format!("  Found {} existing month folders: {:?}", existing_folders.len(), existing_folders))?;
+
+        // Determine which months should exist for this year
+        let max_month = if *year == current_year {
+            // Only check up to previous month for current year
+            if current_month == 1 { 0 } else { current_month - 1 }
+        } else {
+            12 // Check all months for past years
+        };
+
+        for month_num in 1..=max_month {
+            let month_name = all_months[(month_num - 1) as usize];
+            if !existing_folders.iter().any(|f| f.eq_ignore_ascii_case(month_name)) {
+                missing_months.push((*year, month_num, month_name.to_string()));
+            }
+        }
+    }
+
+    if missing_months.is_empty() {
+        tx.send("✅ No missing months detected! All months are up to date.".to_string())?;
+        return Ok(Vec::new());
+    }
+
+    let missing_labels: Vec<String> = missing_months
+        .iter()
+        .map(|(y, _, m)| format!("{} {}", m, y))
+        .collect();
+    tx.send(format!("⚠️ Missing months detected: {}", missing_labels.join(", ")))?;
+
+    // Process each missing month
+    let mut processed_months = Vec::new();
+    for (year, month_num, month_name) in &missing_months {
+        tx.send(format!("📅 Processing {} {}...", month_name, year))?;
+
+        let start_date = NaiveDate::from_ymd_opt(*year, *month_num, 1)
+            .ok_or_else(|| anyhow::anyhow!("Invalid date for {} {}", month_name, year))?;
+
+        let end_date = if *month_num == 12 {
+            NaiveDate::from_ymd_opt(*year + 1, 1, 1)
+        } else {
+            NaiveDate::from_ymd_opt(*year, *month_num + 1, 1)
+        }
+        .ok_or_else(|| anyhow::anyhow!("Invalid end date calculation"))?
+        .pred_opt()
+        .ok_or_else(|| anyhow::anyhow!("Invalid end date"))?;
+
+        match run_manual_processing(start_date, end_date, tx).await {
+            Ok(_) => {
+                tx.send(format!("✅ {} {} processed successfully!", month_name, year))?;
+                processed_months.push(format!("{} {}", month_name, year));
+            }
+            Err(e) => {
+                tx.send(format!("❌ Failed to process {} {}: {}", month_name, year, e))?;
+            }
+        }
+    }
+
+    tx.send(format!(
+        "__CATCHUP_RESULTS__:total_missing={},processed={}",
+        missing_months.len(),
+        processed_months.len()
+    ))?;
+
+    Ok(processed_months)
+}
+
+/// Parse the folder path to extract base path and years to check
+fn parse_folder_years(folder_path: &str, current_year: i32, current_month: u32) -> (String, Vec<i32>) {
+    let parts: Vec<&str> = folder_path.rsplitn(2, '/').collect();
+
+    if parts.len() == 2 {
+        // Try to parse the last segment as a year
+        if let Ok(year) = parts[0].parse::<i32>() {
+            let base = parts[1].to_string();
+            let mut years = vec![year];
+            // If configured year is current year and we're in Jan, also check previous year
+            if year == current_year && current_month == 1 {
+                years.insert(0, current_year - 1);
+            }
+            // If the configured year is older, include all years up to current
+            if year < current_year {
+                for y in (year + 1)..=current_year {
+                    years.push(y);
+                }
+            }
+            return (base, years);
+        }
+    }
+
+    // Fallback: treat entire path as base, check current year
+    let mut years = vec![current_year];
+    if current_month == 1 {
+        years.insert(0, current_year - 1);
+    }
+    (folder_path.to_string(), years)
+}
+
 /// Determine the billing month from the date range
 fn determine_billing_month(start_date: NaiveDate, end_date: NaiveDate) -> String {
     let start_month = start_date.month();
     let end_month = end_date.month();
 
     if start_month == end_month {
-        format!("{}", chrono::Month::try_from(end_month as u8).unwrap().name())
+        chrono::Month::try_from(end_month as u8).unwrap().name().to_string()
     } else {
         let days_in_end_month = (end_date - NaiveDate::from_ymd_opt(end_date.year(), end_date.month(), 1).unwrap()).num_days() + 1;
         let total_days = (end_date - start_date).num_days() + 1;
 
         if days_in_end_month < 15 && total_days > 20 {
-            format!("{}", chrono::Month::try_from(start_month as u8).unwrap().name())
+            chrono::Month::try_from(start_month as u8).unwrap().name().to_string()
         } else {
-            format!("{}", chrono::Month::try_from(end_month as u8).unwrap().name())
+            chrono::Month::try_from(end_month as u8).unwrap().name().to_string()
         }
     }
 }

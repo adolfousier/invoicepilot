@@ -125,6 +125,57 @@ async fn create_folder(
     Ok(folder_id)
 }
 
+/// List all subfolder names within a parent folder path
+pub async fn list_subfolders(
+    client: &DriveClient,
+    folder_path: &str,
+) -> Result<Vec<String>> {
+    // First, resolve the parent folder ID by traversing the path
+    let parts: Vec<&str> = folder_path.split('/').filter(|s| !s.is_empty()).collect();
+    if parts.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut parent_id = "root".to_string();
+    for part in &parts {
+        match find_folder(client, part, &parent_id).await? {
+            Some(id) => parent_id = id,
+            None => return Ok(Vec::new()), // Parent path doesn't exist yet
+        }
+    }
+
+    // Now list all subfolders in this parent
+    let query = format!(
+        "'{}' in parents and mimeType='{}' and trashed=false",
+        parent_id, FOLDER_MIME_TYPE
+    );
+
+    let url = format!("{}/files", DRIVE_API_BASE);
+
+    let response = client.client()
+        .get(&url)
+        .bearer_auth(client.access_token())
+        .query(&[("q", &query), ("fields", &"files(id, name)".to_string())])
+        .send()
+        .await
+        .context("Failed to list subfolders")?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        anyhow::bail!("Drive API error ({}): {}", status, error_text);
+    }
+
+    let result: FileListResponse = response.json().await
+        .context("Failed to parse subfolder list response")?;
+
+    let names = result.files
+        .map(|files| files.into_iter().map(|f| f.name).collect())
+        .unwrap_or_default();
+
+    Ok(names)
+}
+
 #[cfg(test)]
 mod tests {
 

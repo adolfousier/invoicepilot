@@ -87,8 +87,8 @@ pub async fn get_message_attachments(
 
 /// Extract sender name from message headers
 fn extract_sender_name(message: &Message) -> String {
-    if let Some(payload) = &message.payload {
-        if let Some(headers) = &payload.headers {
+    if let Some(payload) = &message.payload
+        && let Some(headers) = &payload.headers {
             for header in headers {
                 if header.name.to_lowercase() == "from" {
                     // Extract name from "Name <email@example.com>" format
@@ -112,7 +112,6 @@ fn extract_sender_name(message: &Message) -> String {
                 }
             }
         }
-    }
     String::new()
 }
 
@@ -143,16 +142,13 @@ fn sanitize_sender_name(name: &str) -> String {
 fn find_attachments(part: &MessagePart, attachments: &mut Vec<(String, String)>) {
     // Check if this part is an attachment
     // An attachment has a filename and an attachment_id
-    if let Some(filename) = &part.filename {
-        if !filename.is_empty() {
-            if let Some(body) = &part.body {
-                if let Some(attachment_id) = &body.attachment_id {
-                    // This is an attachment - add it regardless of mime type
-                    attachments.push((filename.clone(), attachment_id.clone()));
-                }
-            }
+    if let Some(filename) = &part.filename
+        && !filename.is_empty()
+        && let Some(body) = &part.body
+        && let Some(attachment_id) = &body.attachment_id {
+            // This is an attachment - add it regardless of mime type
+            attachments.push((filename.clone(), attachment_id.clone()));
         }
-    }
 
     // Recursively check child parts
     if let Some(parts) = &part.parts {
@@ -224,7 +220,7 @@ fn detect_bank_name(message: &Message) -> Option<String> {
         // Convert to title case for consistent folder naming
         name.split_whitespace()
             .map(|word| {
-                if word.len() > 0 {
+                if !word.is_empty() {
                     format!("{}{}", word.chars().next().unwrap().to_uppercase(), word[1..].to_lowercase())
                 } else {
                     word.to_string()
@@ -251,13 +247,11 @@ fn extract_search_text(message: &Message) -> String {
         }
         
         // Extract from body if available
-        if let Some(body) = &payload.body {
-            if let Some(data) = &body.data {
+        if let Some(body) = &payload.body
+            && let Some(data) = &body.data {
                 // Try to decode and extract text from body
-                // This is a simplified version - in production you'd want proper MIME parsing
                 text.push_str(data);
             }
-        }
     }
     
     text.to_lowercase()
