@@ -25,6 +25,10 @@ pub struct Config {
     pub start_date: NaiveDate,
     pub end_date: NaiveDate,
 
+    // Email notifications
+    pub send_notify_email: bool,
+    pub notify_email: Option<String>,
+
     // Debug logging
     pub debug_logs_enabled: bool,
 }
@@ -65,6 +69,10 @@ impl Config {
                 .collect(),
             start_date,
             end_date,
+            send_notify_email: env::var("SEND_NOTIFY_EMAIL")
+                .unwrap_or_else(|_| "false".to_string())
+                .to_lowercase() == "true",
+            notify_email: env::var("NOTIFY_EMAIL").ok().filter(|s| !s.is_empty()),
             debug_logs_enabled: env::var("DEBUG_LOGS_ENABLED")
                 .unwrap_or_else(|_| "false".to_string())
                 .to_lowercase() == "true",

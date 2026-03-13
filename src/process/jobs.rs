@@ -140,6 +140,24 @@ pub async fn run_manual_processing(
     tx.send(format!("__RESULTS__:processed={},month={},folder={}",
         all_attachments.len(), billing_month, monthly_folder_path))?;
 
+    // Send email notification if enabled
+    if config.send_notify_email
+        && let Some(ref notify_to) = config.notify_email {
+            tx.send("📧 Sending notification email...".to_string())?;
+            let body = gmail::notify::build_completion_body(
+                all_attachments.len(), 0, 0,
+                &monthly_folder_path, std::slice::from_ref(&billing_month),
+            );
+            match gmail::notify::send_notification(
+                &gmail_client, notify_to,
+                &format!("Invoice Pilot: {} processed ({})", all_attachments.len(), billing_month),
+                &body,
+            ).await {
+                Ok(_) => tx.send(format!("📧 Notification sent to {}", notify_to))?,
+                Err(e) => tx.send(format!("⚠️ Failed to send notification: {}", e))?,
+            }
+        }
+
     tx.send("Processing completed successfully!".to_string())?;
 
     Ok(())
@@ -247,6 +265,33 @@ pub async fn run_catchup_processing(
         missing_months.len(),
         processed_months.len()
     ))?;
+
+    // Send catchup summary notification if enabled
+    if config.send_notify_email && !processed_months.is_empty()
+        && let Some(ref notify_to) = config.notify_email {
+            tx.send("📧 Sending catchup summary notification...".to_string())?;
+
+            let gmail_token = crate::auth::gmail_auth::get_gmail_token(
+                config.gmail_client_id.clone(),
+                config.gmail_client_secret.clone(),
+            )
+            .await?;
+            let gmail_client = gmail::client::GmailClient::new(gmail_token);
+
+            let folder = format!("{}/{}", base_path, years_to_check.last().unwrap_or(&current_year));
+            let body = gmail::notify::build_completion_body(
+                processed_months.len(), processed_months.len(), missing_months.len() - processed_months.len(),
+                &folder, &processed_months,
+            );
+            match gmail::notify::send_notification(
+                &gmail_client, notify_to,
+                &format!("Invoice Pilot Catchup: {} months processed", processed_months.len()),
+                &body,
+            ).await {
+                Ok(_) => tx.send(format!("📧 Catchup notification sent to {}", notify_to))?,
+                Err(e) => tx.send(format!("⚠️ Failed to send catchup notification: {}", e))?,
+            }
+        }
 
     Ok(processed_months)
 }
