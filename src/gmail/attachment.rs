@@ -140,13 +140,11 @@ fn sanitize_sender_name(name: &str) -> String {
 
 /// Recursively find all attachments in message parts
 fn find_attachments(part: &MessagePart, attachments: &mut Vec<(String, String)>) {
-    // Check if this part is an attachment
-    // An attachment has a filename and an attachment_id
     if let Some(filename) = &part.filename
         && !filename.is_empty()
         && let Some(body) = &part.body
-        && let Some(attachment_id) = &body.attachment_id {
-            // This is an attachment - add it regardless of mime type
+        && let Some(attachment_id) = &body.attachment_id
+        && is_document_attachment(filename, part.mime_type.as_deref()) {
             attachments.push((filename.clone(), attachment_id.clone()));
         }
 
@@ -156,6 +154,33 @@ fn find_attachments(part: &MessagePart, attachments: &mut Vec<(String, String)>)
             find_attachments(child_part, attachments);
         }
     }
+}
+
+/// Check if an attachment is a document (PDF, CSV, spreadsheet) rather than an image
+fn is_document_attachment(filename: &str, mime_type: Option<&str>) -> bool {
+    let lower = filename.to_lowercase();
+    let allowed_extensions = [
+        ".pdf", ".csv", ".xls", ".xlsx", ".doc", ".docx",
+        ".txt", ".xml", ".ods", ".odt", ".rtf",
+    ];
+
+    if allowed_extensions.iter().any(|ext| lower.ends_with(ext)) {
+        return true;
+    }
+
+    if let Some(mime) = mime_type {
+        let m = mime.to_lowercase();
+        return m.contains("pdf")
+            || m.contains("csv")
+            || m.contains("spreadsheet")
+            || m.contains("excel")
+            || m.contains("msword")
+            || m.contains("document")
+            || m.contains("text/plain")
+            || m.contains("text/xml");
+    }
+
+    false
 }
 
 /// Download attachment data
