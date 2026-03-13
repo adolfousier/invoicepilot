@@ -8,6 +8,8 @@ mod gmail;
 mod process;
 mod scheduler;
 mod interfaces;
+#[cfg(test)]
+mod test;
 
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate};

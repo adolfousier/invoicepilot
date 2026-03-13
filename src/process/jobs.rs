@@ -252,7 +252,7 @@ pub async fn run_catchup_processing(
 }
 
 /// Parse the folder path to extract base path and years to check
-fn parse_folder_years(folder_path: &str, current_year: i32, current_month: u32) -> (String, Vec<i32>) {
+pub(crate) fn parse_folder_years(folder_path: &str, current_year: i32, current_month: u32) -> (String, Vec<i32>) {
     let parts: Vec<&str> = folder_path.rsplitn(2, '/').collect();
 
     if parts.len() == 2 {
@@ -283,7 +283,7 @@ fn parse_folder_years(folder_path: &str, current_year: i32, current_month: u32) 
 }
 
 /// Determine the billing month from the date range
-fn determine_billing_month(start_date: NaiveDate, end_date: NaiveDate) -> String {
+pub(crate) fn determine_billing_month(start_date: NaiveDate, end_date: NaiveDate) -> String {
     let start_month = start_date.month();
     let end_month = end_date.month();
 
