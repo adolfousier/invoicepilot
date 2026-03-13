@@ -32,12 +32,14 @@ Invoice Pilot is a fully automated invoice and bank statement management tool bu
 
 ## What It Does
 
-✅ **Fetches invoices and bank statements from Gmail**  
-✅ **Automatically detects financial institutions** (banks, brokerages, exchanges, payment processors)  
-✅ **Downloads all attachments** from matching emails  
-✅ **Organizes files by institution** in Google Drive with proper capitalization  
-✅ **Creates smart filenames** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)  
-✅ **Prevents duplicates** by checking existing files  
+✅ **Fetches invoices and bank statements from Gmail**
+✅ **Automatically detects financial institutions** (banks, brokerages, exchanges, payment processors)
+✅ **Downloads document attachments** (PDF, CSV, XLS, DOC, etc.) — skips images
+✅ **Organizes files by institution** in Google Drive with proper capitalization
+✅ **Creates smart filenames** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)
+✅ **Catches up missing months** by detecting gaps on Google Drive and backfilling automatically
+✅ **Prevents duplicates** by checking existing files
+✅ **Email notifications** on processing completion via Gmail API
 ✅ **Runs manually or on schedule**
 
 ## Features
@@ -47,11 +49,14 @@ Invoice Pilot is a fully automated invoice and bank statement management tool bu
 - **Automatic token refresh**
 - **Gmail search** for invoices/faturas/bank statements with attachments
 - **Smart filename prefixing** with sender names
+- **Document-only downloads** — filters to PDF, CSV, XLS, XLSX, DOC, DOCX, TXT, XML, ODS, ODT, RTF (skips images)
 - **Automatic financial institution detection** for banks, brokerages, exchanges, and payment processors
 - **Financial institution folder organization** (separate folders per institution with proper capitalization)
+- **Catchup missing months** — detects gaps on Google Drive and processes missing months automatically
 - **Google Drive upload** with automatic folder creation
+- **Email notifications** — optional completion summary sent via Gmail API
 - **Manual and scheduled execution modes** with Docker-based automation
-- **Automatic monthly scheduling** - runs on configured day without user interaction
+- **Automatic monthly scheduling** — runs on configured day without user interaction
 - **Duplicate detection and skipping**
 - **Comprehensive error handling and logging**
 
@@ -161,6 +166,10 @@ cargo build --release
 
    # Keywords to search for (comma-separated)
    TARGET_KEYWORDS_TO_FETCH_AND_DOWNLOAD="invoice, invoices, fatura, faturas, statement, bank, extrato, movimientos, financial, fiscal, tributary"
+
+   # Email notifications (optional)
+   SEND_NOTIFY_EMAIL=false
+   NOTIFY_EMAIL=your-email@example.com
    ```
 
 ## Usage
@@ -204,8 +213,8 @@ cargo run -- tui
 
 **Manual Processing Panel:**
 - `Enter`: Start processing or configure dates
+- `C`: Catchup missing months (detects gaps on Drive and processes them)
 - `R`: Reset dates and results
-- `C`: Cancel processing (when running)
 
 **Authentication Panel:**
 - `G`: Authenticate Gmail account
@@ -511,17 +520,22 @@ src/
 ├── gmail/              # Gmail API client
 │   ├── client.rs       # HTTP client
 │   ├── search.rs       # Email search with bank detection
-│   └── attachment.rs   # Attachment download with sender/bank extraction
+│   ├── attachment.rs   # Attachment download with sender/bank extraction
+│   └── notify.rs       # Email notifications via Gmail API
 ├── drive/              # Google Drive API client
 │   ├── client.rs       # HTTP client
-│   ├── folder.rs       # Folder management
+│   ├── folder.rs       # Folder management & subfolder listing
 │   └── upload.rs       # File upload
+├── process/            # Processing logic
+│   └── jobs.rs         # Manual & catchup processing jobs
 ├── scheduler/          # Scheduling logic
 │   └── runner.rs       # Date calculations
 ├── config/             # Configuration
 │   └── env.rs          # .env parsing
 ├── cli/                # CLI interface
 │   └── args.rs         # Argument parsing
+├── test/               # Unit tests
+│   └── app_tests.rs    # App state & helper tests
 └── main.rs             # Application entry point
 ```
 

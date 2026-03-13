@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.24] - 2026-03-13
+
+### Added
+- **Catchup Missing Months**: Automatically detects missing month folders on Google Drive and processes them. Press `C` in Manual Processing panel to run catchup
+- **Email Notifications**: Optional completion summary emails sent via Gmail API after processing. Configure with `SEND_NOTIFY_EMAIL` and `NOTIFY_EMAIL` environment variables
+- **Document-Only Downloads**: Attachments filtered to documents only (PDF, CSV, XLS, XLSX, DOC, DOCX, TXT, XML, ODS, ODT, RTF) — images like .jpg are now skipped
+- **Subfolder Listing**: New `list_subfolders()` in drive/folder.rs for detecting existing month folders on Drive
+- **Comprehensive Tests**: 54 unit tests covering App state, billing month detection, folder year parsing, and processing lifecycle
+- **CI/CD Release Workflow**: GitHub Actions workflow to build and release binaries for Linux (x86_64, aarch64), macOS (x86_64, aarch64), and Windows (x86_64)
+
+### Changed
+- **Attachment Filtering**: `find_attachments()` now uses `is_document_attachment()` allowlist instead of accepting all file types
+- **Notification Module**: New `src/gmail/notify.rs` with `send_notification()` and `build_completion_body()`
+- **Config**: Added `send_notify_email` and `notify_email` fields to Config struct
+
+### Fixed
+- **All Clippy Warnings**: Fixed collapsible ifs, useless format!, needless borrows, or_default, unnecessary casts, and more across 8 files
+
 ## [0.1.23] - 2025-12-18
 
 ### Changed
