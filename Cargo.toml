@@ -1,7 +1,22 @@
 [package]
-name = "invoice-pilot"
+name = "invoicepilot"
 version = "0.1.24"
 edition = "2024"
+authors = ["Adolfo Usier <https://github.com/adolfousier>"]
+description = "Automated invoice and bank statement management — fetches from Gmail, organizes by financial institution, and uploads to Google Drive"
+license = "MIT"
+repository = "https://github.com/adolfousier/invoicepilot"
+homepage = "https://github.com/adolfousier/invoicepilot"
+readme = "README.md"
+keywords = ["invoice", "gmail", "google-drive", "automation", "finance"]
+categories = ["command-line-utilities", "finance"]
+exclude = [
+    "docker/",
+    "src/assets/",
+    "src/data/",
+    "src/plans/",
+    ".github/",
+]
 
 [dependencies]
 anyhow = "1.0.100"
@@ -16,7 +31,7 @@ log = "0.4.28"
 log4rs = "1.4.0"
 oauth2 = "4.4"
 rand = "0.9.2"
-reqwest = { version = "0.12.23", features = ["json", "multipart"] }
+reqwest = { version = "0.12.23", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 rsa = "0.9.8"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
@@ -31,7 +46,11 @@ ratatui = "0.29.0"
 crossterm = "0.28.1"
 
 # Database dependencies
-sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-rustls", "chrono"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "chrono", "sqlite"] }
+
+[features]
+default = []
+postgres = ["sqlx/postgres"]
 
 [dev-dependencies]
 mockito = "1.7.0"

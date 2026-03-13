@@ -1,3 +1,5 @@
+//! Interactive terminal user interface powered by Ratatui and Crossterm.
+
 use crate::app::{App, AuthStatus, FocusedPanel, PopupState};
 use crate::process::jobs;
 use crate::interfaces::ui::draw;
@@ -10,6 +12,7 @@ use ratatui::prelude::*;
 use std::{io, time::Duration};
 use tokio::sync::mpsc;
 
+/// Initialize the terminal, run the interactive TUI event loop, and restore on exit.
 pub async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
     // Setup terminal
     enable_raw_mode()?;
@@ -24,8 +27,7 @@ pub async fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize database connection
     match crate::db::init_pool().await {
         Ok(pool) => {
-            app.db_pool = Some(pool.clone());
-            // Load persisted logs from database
+            app.db_pool = Some(pool);
             if let Err(e) = app.load_persisted_logs().await {
                 eprintln!("Could not load persisted logs: {}", e);
             }

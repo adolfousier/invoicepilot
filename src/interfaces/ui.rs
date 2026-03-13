@@ -1,3 +1,5 @@
+//! TUI rendering — draws panels, popups, and status indicators.
+
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},

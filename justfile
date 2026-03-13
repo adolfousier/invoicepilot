@@ -43,15 +43,15 @@ stop-db:
   cd docker && docker-compose -f compose-postgres.yml stop
   @echo "Database stopped!"
 
-# Build release binary
+# Build release binary (with PostgreSQL)
 build:
   @echo "Building Invoice Pilot release binary..."
-  cargo build --release
+  cargo build --release --features postgres
 
 # Run cargo check (fast compilation check)
 check:
   @echo "Running cargo check..."
-  cargo check
+  cargo check --features postgres
 
 # Clean build artifacts
 clean:
@@ -59,12 +59,12 @@ clean:
   cargo clean
   @echo "Clean complete!"
 
-# Build and run release binary
+# Build and run release binary (with PostgreSQL)
 run: start-db build
   @echo "Starting Invoice Pilot TUI..."
-  ./target/release/invoice-pilot
+  ./target/release/invoicepilot
 
-# Run in development mode (faster builds)
+# Run in development mode (with PostgreSQL, faster builds)
 dev: start-db
   @echo "Starting Invoice Pilot in development mode..."
-  cargo run
+  cargo run --features postgres

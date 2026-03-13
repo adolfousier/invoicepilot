@@ -1,3 +1,5 @@
+//! Processing jobs for manual and catchup invoice workflows.
+
 use crate::auth;
 use crate::config::env::Config;
 use crate::drive;
@@ -7,6 +9,11 @@ use chrono::{Datelike, NaiveDate};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
+/// Run a single manual processing job for the given date range.
+///
+/// Authenticates with Gmail and Drive, searches for invoices, downloads
+/// document attachments, organizes them by financial institution, and
+/// uploads to Google Drive. Sends an optional email notification on completion.
 pub async fn run_manual_processing(
     start_date: NaiveDate,
     end_date: NaiveDate,
@@ -163,7 +170,11 @@ pub async fn run_manual_processing(
     Ok(())
 }
 
-/// Detect missing months on Google Drive and process them
+/// Detect missing month folders on Google Drive and process each gap.
+///
+/// Compares expected monthly folders against existing subfolders on Drive,
+/// then calls [`run_manual_processing`] for each missing month. Sends a
+/// summary email notification when complete (if enabled).
 pub async fn run_catchup_processing(
     tx: &mpsc::UnboundedSender<String>,
 ) -> Result<Vec<String>> {

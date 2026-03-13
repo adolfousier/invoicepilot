@@ -2,36 +2,61 @@ use chrono::Utc;
 use crate::config::env::Config;
 use crate::db::DbPool;
 
+/// TUI panel that currently has keyboard focus.
 #[derive(Debug, Clone, PartialEq)]
 pub enum FocusedPanel {
+    /// Manual invoice processing panel.
     Manual,
+    /// OAuth authentication panel.
     Auth,
+    /// Scheduled/automated processing panel.
     Scheduled,
+    /// Activity log viewer panel.
     Logs,
 }
 
+/// Active popup overlay state in the TUI.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PopupState {
+    /// No popup is open.
     None,
+    /// Date range input dialog.
     DateInput,
+    /// Schedule day configuration dialog.
     ScheduleConfig,
+    /// Gmail OAuth URL display.
     GmailAuthUrl,
+    /// Google Drive OAuth URL display.
     DriveAuthUrl,
+    /// Manual processing confirmation dialog.
     ProcessingConfirm,
+    /// Catchup missing months confirmation dialog.
     CatchupConfirm,
+    /// Help overlay.
     Help,
+    /// First-time setup guide.
     SetupGuide,
+    /// Scrollable detailed activity log viewer.
     DetailedLogs,
 }
 
+/// OAuth authentication state for a Google service.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AuthStatus {
+    /// No valid token available.
     NotAuthenticated,
+    /// OAuth flow is in progress.
     Authenticating,
+    /// Successfully authenticated with a valid token.
     Authenticated,
+    /// Authentication failed with the given error message.
     Error(String),
 }
 
+/// Core application state for the Invoice Pilot TUI.
+///
+/// Holds all UI state, processing progress, authentication status,
+/// and configuration needed to drive the interactive terminal interface.
 #[derive(Debug)]
 pub struct App {
     pub focused_panel: FocusedPanel,
@@ -84,6 +109,7 @@ pub struct App {
 }
 
 impl App {
+    /// Create a new App with default state and no active connections.
     pub fn new() -> Self {
         Self {
             focused_panel: FocusedPanel::Manual,
@@ -116,6 +142,7 @@ impl App {
         }
     }
 
+    /// Append a timestamped message to the progress log and persist to the database.
     pub fn add_progress_message(&mut self, message: String) {
         let formatted = format!("{}: {}", Utc::now().format("%H:%M:%S"), message);
         self.progress_messages.push(formatted.clone());
@@ -134,6 +161,7 @@ impl App {
         }
     }
 
+    /// Load previously persisted activity logs from PostgreSQL.
     pub async fn load_persisted_logs(&mut self) -> anyhow::Result<()> {
         if let Some(pool) = &self.db_pool {
             let messages = crate::db::load_logs(pool).await?;
@@ -142,6 +170,7 @@ impl App {
         Ok(())
     }
 
+    /// Toggle processing state, clearing progress on start and step on stop.
     pub fn set_processing(&mut self, processing: bool) {
         self.is_processing = processing;
         if processing {
@@ -152,12 +181,14 @@ impl App {
         }
     }
 
+    /// Record an error, stop processing, and display the message in the UI.
     pub fn set_error(&mut self, error: String) {
         self.error_message = Some(error);
         self.is_processing = false;
         self.processing_step = None;
     }
 
+    /// Reset all processing result counters and folder/month info.
     pub fn clear_results(&mut self) {
         self.total_processed = 0;
         self.total_uploaded = 0;
@@ -166,31 +197,37 @@ impl App {
         self.drive_folder = None;
     }
 
+    /// Clear date input fields and reset processing results.
     pub fn reset_manual_inputs(&mut self) {
         self.start_date_input.clear();
         self.end_date_input.clear();
         self.clear_results();
     }
 
+    /// Check whether both date fields contain complete `YYYY-MM-DD` strings.
     pub fn is_date_input_valid(&self) -> bool {
         !self.start_date_input.is_empty() && !self.end_date_input.is_empty() &&
         self.start_date_input.len() == 10 && self.end_date_input.len() == 10 // YYYY-MM-DD format
     }
 
+    /// Open a popup overlay and clear any previous error message.
     pub fn open_popup(&mut self, popup: PopupState) {
         self.popup_state = popup;
         self.error_message = None; // Clear any previous errors
     }
 
+    /// Close the active popup and clear any error message.
     pub fn close_popup(&mut self) {
         self.popup_state = PopupState::None;
         self.error_message = None;
     }
 
+    /// Returns `true` if any popup overlay is currently displayed.
     pub fn is_popup_open(&self) -> bool {
         !matches!(self.popup_state, PopupState::None)
     }
 
+    /// Load configuration from environment variables and update app state.
     pub fn load_config(&mut self) -> Result<(), String> {
         match Config::from_env() {
             Ok(config) => {

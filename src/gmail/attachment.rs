@@ -1,19 +1,28 @@
+//! Gmail attachment extraction, bank detection, and temp file management.
+
 use anyhow::{Context, Result};
 use base64::prelude::*;
 use std::path::PathBuf;
 use super::client::{GmailClient, GMAIL_API_BASE, Message, Attachment, MessagePart};
 
+/// A downloaded email attachment with its raw binary data.
 #[derive(Debug, Clone)]
 pub struct InvoiceAttachment {
+    /// Sanitized filename (prefixed with sender name).
     pub filename: String,
+    /// Raw file content bytes.
     pub data: Vec<u8>,
+    /// Gmail message ID this attachment belongs to.
     #[allow(dead_code)]
     pub message_id: String,
 }
 
+/// An attachment paired with its detected financial institution name.
 #[derive(Debug, Clone)]
 pub struct InvoiceAttachmentWithBank {
+    /// The downloaded attachment data.
     pub attachment: InvoiceAttachment,
+    /// Detected bank/institution name, or `None` for general documents.
     pub bank_name: Option<String>,
 }
 

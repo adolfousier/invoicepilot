@@ -143,5 +143,6 @@ pub async fn upload_files(
     Ok(UploadSummary {})
 }
 
+/// Summary returned after a batch upload operation.
 #[derive(Debug, Clone)]
 pub struct UploadSummary {}

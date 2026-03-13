@@ -1,9 +1,15 @@
+//! Environment-based configuration loading and validation.
+
 use anyhow::{Context, Result};
 use chrono::{Datelike, Local, NaiveDate};
 use log::info;
 use serde::Deserialize;
 use std::env;
 
+/// Application configuration loaded from environment variables and `.env` files.
+///
+/// Supports dual Google account setup (separate Gmail and Drive credentials),
+/// configurable search keywords, scheduling, and email notifications.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     // Gmail Account credentials

@@ -12,7 +12,7 @@ Invoice Pilot is a fully automated invoice and bank statement management tool bu
 
 ## Demo
 
-![Demo](src/screenshots/demo.png)
+![Demo](src/assets/demo.png)
 
 ## Table of Contents
 
@@ -32,15 +32,16 @@ Invoice Pilot is a fully automated invoice and bank statement management tool bu
 
 ## What It Does
 
-✅ **Fetches invoices and bank statements from Gmail**
-✅ **Automatically detects financial institutions** (banks, brokerages, exchanges, payment processors)
-✅ **Downloads document attachments** (PDF, CSV, XLS, DOC, etc.) — skips images
-✅ **Organizes files by institution** in Google Drive with proper capitalization
-✅ **Creates smart filenames** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)
-✅ **Catches up missing months** by detecting gaps on Google Drive and backfilling automatically
-✅ **Prevents duplicates** by checking existing files
-✅ **Email notifications** on processing completion via Gmail API
-✅ **Runs manually or on schedule**
+✅ **Fetches invoices and bank statements from Gmail**  
+✅ **Automatically detects financial institutions** (banks, brokerages, exchanges, payment processors)  
+✅ **Downloads document attachments** (PDF, CSV, XLS, DOC, etc.) — skips images  
+✅ **Organizes files by institution** in Google Drive with proper capitalization  
+✅ **Creates smart filenames** with sender names (e.g., `langfuse-gmbh-invoice-12345.pdf`)  
+✅ **Catches up missing months** by detecting gaps on Google Drive and backfilling automatically  
+✅ **Prevents duplicates** by checking existing files  
+✅ **Email notifications** on processing completion via Gmail API  
+✅ **Runs manually or on schedule**  
+  
 
 ## Features
 

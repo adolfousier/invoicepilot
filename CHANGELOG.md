@@ -13,12 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Document-Only Downloads**: Attachments filtered to documents only (PDF, CSV, XLS, XLSX, DOC, DOCX, TXT, XML, ODS, ODT, RTF) — images like .jpg are now skipped
 - **Subfolder Listing**: New `list_subfolders()` in drive/folder.rs for detecting existing month folders on Drive
 - **Comprehensive Tests**: 54 unit tests covering App state, billing month detection, folder year parsing, and processing lifecycle
-- **CI/CD Release Workflow**: GitHub Actions workflow to build and release binaries for Linux (x86_64, aarch64), macOS (x86_64, aarch64), and Windows (x86_64)
+- **CI/CD Release Workflow**: GitHub Actions workflow to build and release binaries for Linux (x86_64, aarch64), macOS (x86_64, aarch64), and Windows (x86_64), plus automatic crates.io publish
+- **SQLite Fallback**: `cargo install invoicepilot` now uses embedded SQLite for activity log persistence — no PostgreSQL required. Source builds use PostgreSQL via `--features postgres`
+- **Crate-Level Documentation**: Full rustdoc coverage — crate docs, module docs, and docstrings on all public structs, enums, and functions
+- **Crates.io Metadata**: Package ready for publishing with description, license, keywords, categories, and repository fields
 
 ### Changed
+- **Package Name**: Renamed from `invoice-pilot` to `invoicepilot` for crates.io
+- **Database Backend**: SQLite (via sqlx) is now the default; PostgreSQL available as optional `postgres` feature flag
+- **Assets Directory**: Renamed `src/screenshots/` to `src/assets/`
 - **Attachment Filtering**: `find_attachments()` now uses `is_document_attachment()` allowlist instead of accepting all file types
 - **Notification Module**: New `src/gmail/notify.rs` with `send_notification()` and `build_completion_body()`
 - **Config**: Added `send_notify_email` and `notify_email` fields to Config struct
+- **justfile**: `just run` and `just dev` now pass `--features postgres` automatically
 
 ### Fixed
 - **All Clippy Warnings**: Fixed collapsible ifs, useless format!, needless borrows, or_default, unnecessary casts, and more across 8 files

@@ -1,23 +1,29 @@
+//! Database layer for persisting activity logs.
+//!
+//! Backend selected at compile time:
+//! - Default (`cargo install invoicepilot`) → SQLite at `~/.config/invoice-pilot/activity.db`
+//! - `--features postgres` → PostgreSQL via `DATABASE_URL`
+
 use anyhow::{Context, Result};
 use chrono::Utc;
-use sqlx::{postgres::PgPoolOptions, Postgres, Pool, Row as _};
-use std::env;
 
-pub type DbPool = Pool<Postgres>;
+// ── PostgreSQL backend ──────────────────────────────────────────────────────
 
+#[cfg(feature = "postgres")]
+pub type DbPool = sqlx::Pool<sqlx::Postgres>;
+
+#[cfg(feature = "postgres")]
 pub async fn init_pool() -> Result<DbPool> {
-    // Load .env file from multiple locations (same as config does)
+    use sqlx::postgres::PgPoolOptions;
+    use std::env;
+
     if dotenvy::dotenv().is_err()
         && dotenvy::from_path("docker/.env").is_err() {
             dotenvy::from_path("../.env").ok();
         }
 
-    let database_url = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            return Err(anyhow::anyhow!("DATABASE_URL not configured"));
-        }
-    };
+    let database_url = env::var("DATABASE_URL")
+        .context("DATABASE_URL not configured")?;
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -25,74 +31,116 @@ pub async fn init_pool() -> Result<DbPool> {
         .await
         .context("Failed to connect to PostgreSQL")?;
 
-    // Create table if it doesn't exist
-    create_tables(&pool).await?;
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS activity_logs (
+            id SERIAL PRIMARY KEY,
+            message TEXT NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )"
+    )
+    .execute(&pool)
+    .await
+    .context("Failed to create activity_logs table")?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at DESC)"
+    )
+    .execute(&pool)
+    .await
+    .context("Failed to create index on activity_logs")?;
 
     Ok(pool)
 }
 
-async fn create_tables(pool: &DbPool) -> Result<()> {
-    // Create table
+#[cfg(feature = "postgres")]
+pub async fn save_log(pool: &DbPool, message: &str) -> Result<()> {
+    sqlx::query("INSERT INTO activity_logs (message, created_at) VALUES ($1, $2)")
+        .bind(message)
+        .bind(Utc::now())
+        .execute(pool)
+        .await
+        .context("Failed to insert log message")?;
+    Ok(())
+}
+
+#[cfg(feature = "postgres")]
+pub async fn load_logs(pool: &DbPool) -> Result<Vec<String>> {
+    use sqlx::Row as _;
+
+    let rows = sqlx::query("SELECT message FROM activity_logs ORDER BY created_at ASC LIMIT 1000")
+        .fetch_all(pool)
+        .await
+        .context("Failed to load logs from database")?;
+
+    Ok(rows.iter().map(|row| row.get::<String, _>("message")).collect())
+}
+
+// ── SQLite backend (default for cargo install) ──────────────────────────────
+
+#[cfg(not(feature = "postgres"))]
+pub type DbPool = sqlx::Pool<sqlx::Sqlite>;
+
+#[cfg(not(feature = "postgres"))]
+pub async fn init_pool() -> Result<DbPool> {
+    use sqlx::sqlite::SqlitePoolOptions;
+
+    let config_dir = dirs::config_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("invoice-pilot");
+
+    std::fs::create_dir_all(&config_dir)
+        .context("Failed to create config directory for SQLite")?;
+
+    let db_path = config_dir.join("activity.db");
+    let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
+
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect(&db_url)
+        .await
+        .context("Failed to open SQLite database")?;
+
     sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS activity_logs (
-            id SERIAL PRIMARY KEY,
+        "CREATE TABLE IF NOT EXISTS activity_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             message TEXT NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        )
-        "#
+            created_at TEXT DEFAULT (datetime('now'))
+        )"
     )
-    .execute(pool)
+    .execute(&pool)
     .await
     .context("Failed to create activity_logs table")?;
 
-    // Create index separately
     sqlx::query(
-        r#"
-        CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at DESC)
-        "#
+        "CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at DESC)"
     )
-    .execute(pool)
+    .execute(&pool)
     .await
     .context("Failed to create index on activity_logs")?;
 
-    Ok(())
+    Ok(pool)
 }
 
+#[cfg(not(feature = "postgres"))]
 pub async fn save_log(pool: &DbPool, message: &str) -> Result<()> {
-    sqlx::query(
-        r#"
-        INSERT INTO activity_logs (message, created_at)
-        VALUES ($1, $2)
-        "#
-    )
-    .bind(message)
-    .bind(Utc::now())
-    .execute(pool)
-    .await
-    .context("Failed to insert log message")?;
-
+    let now = Utc::now().to_rfc3339();
+    sqlx::query("INSERT INTO activity_logs (message, created_at) VALUES (?1, ?2)")
+        .bind(message)
+        .bind(now)
+        .execute(pool)
+        .await
+        .context("Failed to insert log message")?;
     Ok(())
 }
 
+#[cfg(not(feature = "postgres"))]
 pub async fn load_logs(pool: &DbPool) -> Result<Vec<String>> {
-    let rows = sqlx::query(
-        r#"
-        SELECT message
-        FROM activity_logs
-        ORDER BY created_at ASC
-        LIMIT 1000
-        "#
-    )
-    .fetch_all(pool)
-    .await
-    .context("Failed to load logs from database")?;
+    use sqlx::Row as _;
 
-    let messages = rows
-        .iter()
-        .map(|row| row.get::<String, _>("message"))
-        .collect();
+    let rows = sqlx::query("SELECT message FROM activity_logs ORDER BY created_at ASC LIMIT 1000")
+        .fetch_all(pool)
+        .await
+        .context("Failed to load logs from database")?;
 
-    Ok(messages)
+    Ok(rows.iter().map(|row| row.get::<String, _>("message")).collect())
 }
-

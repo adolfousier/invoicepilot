@@ -1,3 +1,31 @@
+//! # Invoice Pilot
+//!
+//! Automated invoice and bank statement management tool built with Rust.
+//!
+//! Invoice Pilot fetches invoices and bank statements from Gmail, automatically detects
+//! financial institutions (banks, brokerages, exchanges, payment processors), and uploads
+//! organized documents to Google Drive with smart folder structure.
+//!
+//! ## Features
+//!
+//! - **Gmail integration** — searches emails by configurable keywords and downloads document attachments
+//! - **Google Drive upload** — creates monthly and institution-specific folders automatically
+//! - **Financial institution detection** — identifies 100+ banks, brokerages, and payment processors
+//! - **Catchup processing** — detects missing months on Drive and backfills automatically
+//! - **Email notifications** — optional completion summary via Gmail API
+//! - **Interactive TUI** — Ratatui-based terminal interface with real-time progress
+//! - **PostgreSQL persistence** — activity logs stored for audit trail
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Interactive TUI mode (default)
+//! invoice-pilot
+//!
+//! # Legacy CLI mode
+//! invoice-pilot manual --date-range 2025-01-01:2025-01-31
+//! ```
+
 mod app;
 mod auth;
 mod cli;
